@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wsl.exe -d Ubuntu-24.04 --exec bash -c \"sshpass -p 'Ongc@1234' scp -o StrictHostKeyChecking=no /home/administrator/projects/llm-inference-service/scripts/enable_ssh_workers.py administrator@10.208.211.62:/tmp/enable_ssh_workers.py && echo 'copied'\" 2>&1)",
+      "Bash(sshpass:*)",
+      "Bash(wsl -d Ubuntu-24.04 -e bash -c \"sudo docker compose -f /home/administrator/projects/llm-inference-service/docker-compose.yml ps -a 2>&1\")",
+      "Bash(wsl:*)",
+      "Bash(python scripts/benchmark.py --api-key sk-ongc-An0SIhEQMxAI27GLejMVqmHmFwWslrCb74SyG3LLWKw --mode all --requests 6)"
+    ]
+  }
+}

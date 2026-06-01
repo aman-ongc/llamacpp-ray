@@ -1,0 +1,108 @@
+{
+  "title": "ONGC LLM Inference Platform",
+  "uid": "llm-platform",
+  "schemaVersion": 37,
+  "version": 3,
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate (req/min)",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}},
+      "targets": [{"refId": "A", "expr": "rate(llm_requests_total[5m]) * 60", "legendFormat": "req/min", "datasource": {"type": "prometheus", "uid": "prometheus"}}]
+    },
+    {
+      "id": 2,
+      "title": "P95 Latency (ms)",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "unit": "ms", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 10000}, {"color": "red", "value": 30000}]}}},
+      "targets": [{"refId": "A", "expr": "histogram_quantile(0.95, rate(llm_request_latency_ms_bucket[10m]))", "legendFormat": "p95 ms", "datasource": {"type": "prometheus", "uid": "prometheus"}}]
+    },
+    {
+      "id": 3,
+      "title": "Active Requests",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 2}, {"color": "red", "value": 5}]}}},
+      "targets": [{"refId": "A", "expr": "llm_active_requests", "legendFormat": "active", "datasource": {"type": "prometheus", "uid": "prometheus"}}]
+    },
+    {
+      "id": 4,
+      "title": "Tokens/sec",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}},
+      "targets": [{"refId": "A", "expr": "rate(llm_completion_tokens_total[5m])", "legendFormat": "tokens/sec", "datasource": {"type": "prometheus", "uid": "prometheus"}}]
+    },
+    {
+      "id": 5,
+      "title": "Request Latency Distribution",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "fieldConfig": {"defaults": {"unit": "ms", "custom": {"lineWidth": 2}}},
+      "targets": [
+        {"refId": "A", "expr": "histogram_quantile(0.50, rate(llm_request_latency_ms_bucket[10m]))", "legendFormat": "p50", "datasource": {"type": "prometheus", "uid": "prometheus"}},
+        {"refId": "B", "expr": "histogram_quantile(0.95, rate(llm_request_latency_ms_bucket[10m]))", "legendFormat": "p95", "datasource": {"type": "prometheus", "uid": "prometheus"}},
+        {"refId": "C", "expr": "histogram_quantile(0.99, rate(llm_request_latency_ms_bucket[10m]))", "legendFormat": "p99", "datasource": {"type": "prometheus", "uid": "prometheus"}}
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Request Count by Status",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "fieldConfig": {"defaults": {"custom": {"lineWidth": 2}}},
+      "targets": [
+        {"refId": "A", "expr": "rate(llm_requests_total{status_code=\"200\"}[5m])", "legendFormat": "200 OK", "datasource": {"type": "prometheus", "uid": "prometheus"}},
+        {"refId": "B", "expr": "rate(llm_requests_total{status_code=\"500\"}[5m])", "legendFormat": "500 Error", "datasource": {"type": "prometheus", "uid": "prometheus"}},
+        {"refId": "C", "expr": "rate(llm_requests_total{status_code=\"429\"}[5m])", "legendFormat": "429 Rate Limited", "datasource": {"type": "prometheus", "uid": "prometheus"}}
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Token Throughput",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+      "fieldConfig": {"defaults": {"custom": {"lineWidth": 2}}},
+      "targets": [
+        {"refId": "A", "expr": "rate(llm_prompt_tokens_total[5m])", "legendFormat": "prompt tokens/s", "datasource": {"type": "prometheus", "uid": "prometheus"}},
+        {"refId": "B", "expr": "rate(llm_completion_tokens_total[5m])", "legendFormat": "completion tokens/s", "datasource": {"type": "prometheus", "uid": "prometheus"}}
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Usage by User and API Key",
+      "type": "table",
+      "datasource": {"type": "postgres", "uid": "llm-postgres"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 20},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"align": "auto", "cellOptions": {"type": "auto"}}
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT u.username, COALESCE(r.api_key_prefix, 'unknown') AS api_key_prefix, COUNT(*) AS requests, COALESCE(SUM(r.prompt_tokens), 0) AS prompt_tokens, COALESCE(SUM(r.completion_tokens), 0) AS completion_tokens, COALESCE(SUM(r.prompt_tokens + r.completion_tokens), 0) AS total_tokens, MAX(r.created_at) AS last_request_at FROM request_logs r LEFT JOIN users u ON r.user_id = u.id WHERE $__timeFilter(r.created_at) GROUP BY u.username, r.api_key_prefix ORDER BY requests DESC LIMIT 50",
+          "datasource": {"type": "postgres", "uid": "llm-postgres"}
+        }
+      ]
+    }
+  ]
+}
