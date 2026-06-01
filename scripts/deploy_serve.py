@@ -32,8 +32,13 @@ print("Ray connected.", flush=True)
 
 from worker.ray_worker import LlamaCppWorker  # noqa: E402
 
-print(f"Starting Serve on {SERVE_HOST}:{SERVE_PORT}", flush=True)
-serve.start(http_options={"host": SERVE_HOST, "port": SERVE_PORT})
+print(f"Starting Serve on {SERVE_HOST}:{SERVE_PORT} (EveryNode proxy)", flush=True)
+# EveryNode: Ray Serve starts an HTTP proxy on each cluster node.
+# Combined with round-robin in the gateway (ray_client.py), this ensures
+# requests are distributed evenly — each node's proxy routes to its local replica.
+serve.start(
+    http_options={"host": SERVE_HOST, "port": SERVE_PORT, "location": "EveryNode"},
+)
 handle = serve.run(LlamaCppWorker.bind(), name="llama-worker", route_prefix="/")
 print("Ray Serve deployment complete.", flush=True)
 print(f"Endpoint: http://10.208.211.62:{SERVE_PORT}/v1/chat/completions", flush=True)
