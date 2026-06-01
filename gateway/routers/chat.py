@@ -41,10 +41,14 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     # Per-request thinking override. None = use global ENABLE_THINKING setting.
     enable_thinking: bool | None = Field(default=None, exclude=True)
+    # When True (default), all requests from the same API key go to the same
+    # Ray worker so llama.cpp can reuse its KV cache across turns.
+    # Set to False to distribute requests round-robin across all workers.
+    session_affinity: bool = Field(default=True, exclude=True)
 
 
 def _payload_for_inference(payload: ChatCompletionRequest) -> dict[str, Any]:
-    data = payload.model_dump(exclude={"enable_thinking"})
+    data = payload.model_dump(exclude={"enable_thinking", "session_affinity"})
     thinking = payload.enable_thinking if payload.enable_thinking is not None else settings.enable_thinking
     data["chat_template_kwargs"] = {"enable_thinking": thinking}
     return data
@@ -105,13 +109,15 @@ async def chat_completions(
     except RedisError:
         pass
 
+    affinity_key = api_key_prefix if payload.session_affinity else None
+
     start = time.perf_counter()
     ACTIVE_REQUESTS.inc()
     try:
         if payload.stream:
             async def event_stream():
                 try:
-                    async for chunk in stream_inference(_payload_for_inference(payload)):
+                    async for chunk in stream_inference(_payload_for_inference(payload), affinity_key):
                         yield chunk
                 except Exception:
                     fallback = _fallback_response(payload)
@@ -136,13 +142,15 @@ async def chat_completions(
                 error_message=None,
                 streaming=True,
             )
-            REQUEST_COUNT.labels(model=payload.model, status_code="200", streaming="true").inc()
-            REQUEST_LATENCY_MS.labels(model=payload.model).observe(latency_ms)
-            PROMPT_TOKENS.labels(model=payload.model).inc(prompt_tokens)
+            # node_ip is unknown for streaming (SSE proxied before node responds);
+            # use "stream" as a sentinel so per-node dashboards stay clean.
+            REQUEST_COUNT.labels(model=payload.model, status_code="200", streaming="true", username=user.username, node_ip="stream").inc()
+            REQUEST_LATENCY_MS.labels(model=payload.model, username=user.username, node_ip="stream").observe(latency_ms)
+            PROMPT_TOKENS.labels(model=payload.model, username=user.username).inc(prompt_tokens)
             return response
 
         try:
-            result = await submit_inference(_payload_for_inference(payload))
+            result = await submit_inference(_payload_for_inference(payload), affinity_key)
         except Exception:
             result = _fallback_response(payload)
         else:
@@ -170,16 +178,16 @@ async def chat_completions(
             streaming=False,
         )
 
-        REQUEST_COUNT.labels(model=payload.model, status_code="200", streaming="false").inc()
-        REQUEST_LATENCY_MS.labels(model=payload.model).observe(latency_ms)
-        PROMPT_TOKENS.labels(model=payload.model).inc(prompt_tokens)
-        COMPLETION_TOKENS.labels(model=payload.model).inc(completion_tokens)
+        REQUEST_COUNT.labels(model=payload.model, status_code="200", streaming="false", username=user.username, node_ip=node_ip).inc()
+        REQUEST_LATENCY_MS.labels(model=payload.model, username=user.username, node_ip=node_ip).observe(latency_ms)
+        PROMPT_TOKENS.labels(model=payload.model, username=user.username).inc(prompt_tokens)
+        COMPLETION_TOKENS.labels(model=payload.model, username=user.username).inc(completion_tokens)
         return JSONResponse(result)
     except HTTPException:
         raise
     except Exception as exc:
         latency_ms = int((time.perf_counter() - start) * 1000)
-        REQUEST_COUNT.labels(model=payload.model, status_code="500", streaming="false").inc()
+        REQUEST_COUNT.labels(model=payload.model, status_code="500", streaming="false", username=user.username, node_ip="unknown").inc()
         await log_request(
             session,
             user=user,

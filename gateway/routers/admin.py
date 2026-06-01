@@ -36,6 +36,14 @@ async def require_admin_secret(
         )
 
 
+async def _get_user_by_username(username: str, session: AsyncSession) -> User:
+    result = await session.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{username}' not found")
+    return user
+
+
 @router.get("/users", dependencies=[Depends(require_admin_secret)])
 async def list_users(session: AsyncSession = Depends(get_db)) -> list[dict[str, object]]:
     result = await session.execute(select(User).order_by(User.id))
@@ -83,28 +91,26 @@ async def create_user(
     }
 
 
-@router.post("/users/{user_id}/keys", dependencies=[Depends(require_admin_secret)])
+@router.post("/users/{username}/keys", dependencies=[Depends(require_admin_secret)])
 async def create_api_key(
-    user_id: int,
+    username: str,
     payload: KeyCreate,
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    user = await session.get(User, user_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user = await _get_user_by_username(username, session)
 
     raw_key = generate_api_key()
-    api_key = APIKey(
-        user_id=user_id,
+    session.add(APIKey(
+        user_id=user.id,
         key_hash=hash_api_key(raw_key),
         key_prefix=raw_key[:12],
         label=payload.label,
         metadata_text=payload.metadata,
         is_active=True,
-    )
-    session.add(api_key)
+    ))
     await session.commit()
     return {
+        "username": user.username,
         "api_key": raw_key,
         "key_prefix": raw_key[:12],
         "label": payload.label,
@@ -112,20 +118,70 @@ async def create_api_key(
     }
 
 
+@router.get("/users/{username}/usage", dependencies=[Depends(require_admin_secret)])
+async def user_usage(
+    username: str,
+    session: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    user = await _get_user_by_username(username, session)
+
+    logs_q = await session.execute(
+        select(RequestLog).where(RequestLog.user_id == user.id)
+    )
+    logs = logs_q.scalars().all()
+
+    if not logs:
+        return {
+            "username": user.username,
+            "total_requests": 0,
+            "successful_requests": 0,
+            "error_requests": 0,
+            "streaming_requests": 0,
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
+            "avg_latency_ms": 0,
+            "by_node": {},
+            "last_request_at": None,
+        }
+
+    successful = [l for l in logs if l.status_code == 200]
+    by_node: dict[str, int] = {}
+    for log in logs:
+        if log.node_ip:
+            by_node[log.node_ip] = by_node.get(log.node_ip, 0) + 1
+
+    return {
+        "username": user.username,
+        "total_requests": len(logs),
+        "successful_requests": len(successful),
+        "error_requests": len(logs) - len(successful),
+        "streaming_requests": sum(1 for l in logs if l.streaming),
+        "total_prompt_tokens": sum(l.prompt_tokens for l in logs),
+        "total_completion_tokens": sum(l.completion_tokens for l in logs),
+        "avg_latency_ms": int(sum(l.latency_ms for l in logs) / len(logs)),
+        "by_node": by_node,
+        "last_request_at": max((l.created_at for l in logs), default=None),
+    }
+
+
 @router.get("/keys", dependencies=[Depends(require_admin_secret)])
 async def list_keys(session: AsyncSession = Depends(get_db)) -> list[dict[str, object]]:
-    result = await session.execute(select(APIKey).order_by(APIKey.id))
-    keys = result.scalars().all()
+    result = await session.execute(
+        select(APIKey, User)
+        .join(User, APIKey.user_id == User.id)
+        .order_by(APIKey.id)
+    )
+    rows = result.all()
     return [
         {
             "id": key.id,
-            "user_id": key.user_id,
+            "username": user.username,
             "key_prefix": key.key_prefix,
             "label": key.label,
             "metadata": key.metadata_text,
             "is_active": key.is_active,
         }
-        for key in keys
+        for key, user in rows
     ]
 
 

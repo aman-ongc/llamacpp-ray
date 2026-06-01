@@ -65,9 +65,10 @@ async def test_chat_completion_stream_success(client, session):
 def test_payload_for_inference_sets_chat_template_kwargs():
     payload = ChatCompletionRequest(messages=[ChatMessage(role="user", content="hello")])
     data = _payload_for_inference(payload)
-    # enable_thinking off by default
     assert data["chat_template_kwargs"] == {"enable_thinking": False}
-    assert "enable_thinking" not in data  # field excluded from payload
+    # gateway-only fields must not reach Ray Serve
+    assert "enable_thinking" not in data
+    assert "session_affinity" not in data
 
 
 def test_payload_for_inference_per_request_thinking_on():
@@ -77,6 +78,20 @@ def test_payload_for_inference_per_request_thinking_on():
     )
     data = _payload_for_inference(payload)
     assert data["chat_template_kwargs"] == {"enable_thinking": True}
+
+
+def test_session_affinity_default_true():
+    payload = ChatCompletionRequest(messages=[ChatMessage(role="user", content="hello")])
+    assert payload.session_affinity is True
+
+
+def test_session_affinity_excluded_from_payload():
+    payload = ChatCompletionRequest(
+        messages=[ChatMessage(role="user", content="hello")],
+        session_affinity=False,
+    )
+    data = _payload_for_inference(payload)
+    assert "session_affinity" not in data
 
 
 def test_normalize_completion_response_removes_reasoning_content():

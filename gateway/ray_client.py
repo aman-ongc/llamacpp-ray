@@ -35,32 +35,56 @@ def _build_proxy_urls() -> list[str]:
     return [f"http://{ip}:{serve_port}" for ip in all_ips]
 
 
+_proxy_urls: list[str] = _build_proxy_urls()
+
 # Infinite round-robin iterator — thread-safe reads for asyncio (GIL protected).
-_proxy_cycle = itertools.cycle(_build_proxy_urls())
+_proxy_cycle = itertools.cycle(_proxy_urls)
 
 
 def _next_proxy_url() -> str:
     return next(_proxy_cycle)
 
 
-async def submit_inference(payload: dict[str, Any]) -> dict[str, Any]:
+def _affinity_proxy_url(key: str) -> str:
+    """Return a deterministic proxy URL for the given affinity key.
+
+    Uses hash(key) % num_nodes so the same API key always maps to the same
+    Ray Serve proxy, and therefore the same GPU replica. This lets llama.cpp
+    reuse its KV cache across consecutive requests from the same user.
+    """
+    return _proxy_urls[hash(key) % len(_proxy_urls)]
+
+
+def _select_proxy_url(affinity_key: str | None) -> str:
+    if affinity_key:
+        return _affinity_proxy_url(affinity_key)
+    return _next_proxy_url()
+
+
+async def submit_inference(
+    payload: dict[str, Any],
+    affinity_key: str | None = None,
+) -> dict[str, Any]:
     headers = {"Content-Type": "application/json"}
     env = {"NO_PROXY": settings.no_proxy, "no_proxy": settings.no_proxy}
     os.environ.update(env)
-    url = f"{_next_proxy_url()}/v1/chat/completions"
+    url = f"{_select_proxy_url(affinity_key)}/v1/chat/completions"
     async with httpx.AsyncClient(timeout=_timeout(), transport=_transport(), trust_env=True) as client:
         response = await client.post(url, json=payload, headers=headers)
         response.raise_for_status()
         return response.json()
 
 
-async def stream_inference(payload: dict[str, Any]) -> AsyncIterator[str]:
+async def stream_inference(
+    payload: dict[str, Any],
+    affinity_key: str | None = None,
+) -> AsyncIterator[str]:
     headers = {"Content-Type": "application/json"}
     payload = dict(payload)
     payload["stream"] = True
     env = {"NO_PROXY": settings.no_proxy, "no_proxy": settings.no_proxy}
     os.environ.update(env)
-    url = f"{_next_proxy_url()}/v1/chat/completions"
+    url = f"{_select_proxy_url(affinity_key)}/v1/chat/completions"
     async with httpx.AsyncClient(timeout=_timeout(), transport=_transport(), trust_env=True) as client:
         async with client.stream("POST", url, json=payload, headers=headers) as response:
             response.raise_for_status()

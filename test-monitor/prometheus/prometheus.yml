@@ -1,0 +1,47 @@
+global:
+  scrape_interval:     10s
+  evaluation_interval: 10s
+
+scrape_configs:
+
+  # LLM gateway metrics — all the llm_* metrics plus per-node GPU/llama/CPU
+  - job_name: "llm-gateway"
+    honor_labels: true        # use the instance labels embedded in the metrics
+    static_configs:
+      - targets: ["exporter:9101"]
+
+  # Simulated node-exporter — 4 stub targets so up{job="node-exporter"} = 4
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["exporter:9201"]
+        labels: {instance: "10.208.211.62:9100"}
+      - targets: ["exporter:9202"]
+        labels: {instance: "10.208.211.54:9100"}
+      - targets: ["exporter:9203"]
+        labels: {instance: "10.208.211.59:9100"}
+      - targets: ["exporter:9204"]
+        labels: {instance: "10.208.211.64:9100"}
+
+  # Simulated nvidia-gpu-exporter targets (stub, GPU metrics come from llm-gateway job)
+  - job_name: "nvidia-gpu-exporter"
+    static_configs:
+      - targets: ["exporter:9201"]
+        labels: {instance: "10.208.211.62:9835"}
+      - targets: ["exporter:9202"]
+        labels: {instance: "10.208.211.54:9835"}
+      - targets: ["exporter:9203"]
+        labels: {instance: "10.208.211.59:9835"}
+      - targets: ["exporter:9204"]
+        labels: {instance: "10.208.211.64:9835"}
+
+  # Simulated llama-cpp targets (stub, llama metrics come from llm-gateway job)
+  - job_name: "llama-cpp"
+    static_configs:
+      - targets: ["exporter:9201"]
+        labels: {instance: "10.208.211.62:8080"}
+      - targets: ["exporter:9202"]
+        labels: {instance: "10.208.211.54:8080"}
+      - targets: ["exporter:9203"]
+        labels: {instance: "10.208.211.59:8080"}
+      - targets: ["exporter:9204"]
+        labels: {instance: "10.208.211.64:8080"}

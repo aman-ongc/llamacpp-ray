@@ -1,0 +1,96 @@
+networks:
+  monitor-net:
+    driver: bridge
+
+services:
+
+  # ── Dummy metrics exporter ────────────────────────────────────────────────
+  exporter:
+    build:
+      context: ./exporter
+    container_name: tm-exporter
+    networks: [monitor-net]
+    restart: unless-stopped
+    ports:
+      - "9101:9101"   # main /metrics  (for manual inspection)
+    expose:
+      - "9101"
+      - "9201"
+      - "9202"
+      - "9203"
+      - "9204"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9101/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── PostgreSQL with seed data ─────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: tm-postgres
+    environment:
+      POSTGRES_USER: llm
+      POSTGRES_PASSWORD: llm
+      POSTGRES_DB: llm_platform
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - tm-postgres-data:/var/lib/postgresql/data
+    networks: [monitor-net]
+    ports:
+      - "15433:5432"   # offset to avoid clash with any running prod postgres
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llm -d llm_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: tm-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - tm-prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    networks: [monitor-net]
+    ports:
+      - "19090:9090"
+    depends_on:
+      exporter:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: tm-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ongc1234
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Install postgres plugin (bundled in latest Grafana)
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - tm-grafana-data:/var/lib/grafana
+    networks: [monitor-net]
+    ports:
+      - "13001:3000"   # offset so it doesn't clash with prod grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  tm-postgres-data:
+  tm-prometheus-data:
+  tm-grafana-data:

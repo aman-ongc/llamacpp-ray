@@ -70,11 +70,10 @@ def main() -> int:
             else:
                 raise
 
-        user_id = results["create_user"]["payload"].get("id")
-        if user_id:
+        if results["create_user"]["payload"].get("username") or results["create_user"]["payload"].get("note"):
             status, key_payload = request_json(
                 "POST",
-                f"{base_url}/admin/users/{user_id}/keys",
+                f"{base_url}/admin/users/smoke-user/keys",
                 payload={"label": "smoke"},
                 headers=admin_headers,
             )
