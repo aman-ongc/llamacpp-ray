@@ -41,10 +41,10 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     # Per-request thinking override. None = use global ENABLE_THINKING setting.
     enable_thinking: bool | None = Field(default=None, exclude=True)
-    # When True (default), all requests from the same API key go to the same
-    # Ray worker so llama.cpp can reuse its KV cache across turns.
-    # Set to False to distribute requests round-robin across all workers.
-    session_affinity: bool = Field(default=True, exclude=True)
+    # When True, all requests from the same API key go to the same Ray worker
+    # so llama.cpp can reuse its KV cache across turns. Defaults to False;
+    # set explicitly in the request to enable sticky routing.
+    session_affinity: bool = Field(default=False, exclude=True)
 
 
 def _payload_for_inference(payload: ChatCompletionRequest) -> dict[str, Any]:

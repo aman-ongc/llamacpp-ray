@@ -80,9 +80,9 @@ def test_payload_for_inference_per_request_thinking_on():
     assert data["chat_template_kwargs"] == {"enable_thinking": True}
 
 
-def test_session_affinity_default_true():
+def test_session_affinity_default_false():
     payload = ChatCompletionRequest(messages=[ChatMessage(role="user", content="hello")])
-    assert payload.session_affinity is True
+    assert payload.session_affinity is False
 
 
 def test_session_affinity_excluded_from_payload():
