@@ -105,7 +105,24 @@ for port in 8001 "${RAY_PORT}"; do
     fi
 done
 
-# Start llama.cpp on WS-11 first (Ray Serve replica on this node needs it)
+# Head node gets 1 GPU + 6 CPUs so Ray Serve schedules a replica here too.
+if ray status --address "${CONTROLLER_IP}:${RAY_PORT}" > /dev/null 2>&1; then
+    ok "Ray head already running"
+else
+    info "Starting Ray head node (1 GPU, 6 CPUs — head + inference worker)..."
+    ray start \
+        --head \
+        --node-ip-address="${CONTROLLER_IP}" \
+        --port="${RAY_PORT}" \
+        --dashboard-host=0.0.0.0 \
+        --dashboard-port=8265 \
+        --num-gpus=1 \
+        --num-cpus=6
+    sleep 4
+fi
+
+# Start llama.cpp on WS-11 AFTER Ray head is up — ensures Ray has settled
+# before llama-server claims VRAM, maximising GPU layer offload count.
 if ! curl --noproxy '*' -sf "http://${CONTROLLER_IP}:${LLAMA_PORT}/health" >/dev/null 2>&1; then
     info "Starting llama.cpp on WS-11..."
     nohup "$LLAMA_SERVER" \
@@ -121,22 +138,6 @@ if ! curl --noproxy '*' -sf "http://${CONTROLLER_IP}:${LLAMA_PORT}/health" >/dev
     ok "llama.cpp launched on WS-11 (log: /tmp/llama-server-ws11.log)"
 else
     ok "llama.cpp already running on WS-11"
-fi
-
-# Head node gets 1 GPU + 6 CPUs so Ray Serve schedules a replica here too.
-if ray status --address "${CONTROLLER_IP}:${RAY_PORT}" > /dev/null 2>&1; then
-    ok "Ray head already running"
-else
-    info "Starting Ray head node (1 GPU, 6 CPUs — head + inference worker)..."
-    ray start \
-        --head \
-        --node-ip-address="${CONTROLLER_IP}" \
-        --port="${RAY_PORT}" \
-        --dashboard-host=0.0.0.0 \
-        --dashboard-port=8265 \
-        --num-gpus=1 \
-        --num-cpus=6
-    sleep 4
 fi
 
 info "Starting remote worker nodes (WS-03, WS-08, WS-13) in parallel..."

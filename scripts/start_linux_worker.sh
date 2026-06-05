@@ -29,7 +29,30 @@ sshpass -p "$SSH_PASS" scp -o StrictHostKeyChecking=no -r \
   "$ROOT_DIR/scripts" \
   "$WORKER_USER@$WORKER_HOST:$REMOTE_DIR/"
 
-echo "[worker] Starting llama.cpp if needed on ${WORKER_HOST}"
+echo "[worker] Attaching Ray node to ${RAY_HEAD_IP}:${RAY_PORT}"
+remote bash -s <<REMOTE
+set -euo pipefail
+export no_proxy="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in"
+export NO_PROXY="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in"
+export RAY_grpc_enable_http_proxy=0
+
+if ! pgrep -f raylet >/dev/null 2>&1; then
+  nohup env \
+    no_proxy="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in" \
+    NO_PROXY="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in" \
+    RAY_grpc_enable_http_proxy=0 \
+    RAY_SERVE_PROXY_PREFER_LOCAL_NODE_ROUTING=0 \
+    /mnt/d/VirtualEnvironments/llm-platform/bin/ray start \
+    --address="$RAY_HEAD_IP:$RAY_PORT" \
+    --node-ip-address="$WORKER_HOST" \
+    --num-gpus=1 \
+    --num-cpus=6 \
+    >/tmp/ray-worker.log 2>&1 &
+  sleep 12
+fi
+REMOTE
+
+echo "[worker] Starting llama.cpp on ${WORKER_HOST} (after Ray joined)"
 remote bash -s <<REMOTE
 set -euo pipefail
 
@@ -68,29 +91,6 @@ if ! curl --noproxy '*' -sf "http://$LLAMA_HOST:$LLAMA_PORT/health" >/dev/null 2
       --spec-draft-n-max 2 \
       >/tmp/llama-server.log 2>&1 &
   fi
-fi
-REMOTE
-
-echo "[worker] Attaching Ray node to ${RAY_HEAD_IP}:${RAY_PORT}"
-remote bash -s <<REMOTE
-set -euo pipefail
-export no_proxy="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in"
-export NO_PROXY="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in"
-export RAY_grpc_enable_http_proxy=0
-
-if ! pgrep -f raylet >/dev/null 2>&1; then
-  nohup env \
-    no_proxy="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in" \
-    NO_PROXY="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in" \
-    RAY_grpc_enable_http_proxy=0 \
-    RAY_SERVE_PROXY_PREFER_LOCAL_NODE_ROUTING=0 \
-    /mnt/d/VirtualEnvironments/llm-platform/bin/ray start \
-    --address="$RAY_HEAD_IP:$RAY_PORT" \
-    --node-ip-address="$WORKER_HOST" \
-    --num-gpus=1 \
-    --num-cpus=6 \
-    >/tmp/ray-worker.log 2>&1 &
-  sleep 8
 fi
 REMOTE
 
