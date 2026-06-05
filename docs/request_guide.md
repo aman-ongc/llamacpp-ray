@@ -6,7 +6,7 @@ This guide covers how to send requests to the ONGC LLM platform once you have be
 
 ## Base URL and Authentication
 
-**Base URL:** `http://10.208.211.62:8000`
+**Base URL:** `http://10.208.211.62:18000`
 
 Every request must include your API key in the `Authorization` header:
 
@@ -56,7 +56,7 @@ All examples use `curl`. Python equivalents are shown where useful.
 ### 1. Basic Text Request
 
 ```bash
-curl --noproxy '*' http://10.208.211.62:8000/v1/chat/completions \
+curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -75,7 +75,7 @@ curl --noproxy '*' http://10.208.211.62:8000/v1/chat/completions \
 Add `"stream": true` to receive tokens as they are generated.
 
 ```bash
-curl --noproxy '*' http://10.208.211.62:8000/v1/chat/completions \
+curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -102,7 +102,7 @@ data: [DONE]
 Pass a `system` role message as the first entry in `messages`.
 
 ```bash
-curl --noproxy '*' http://10.208.211.62:8000/v1/chat/completions \
+curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -122,7 +122,7 @@ curl --noproxy '*' http://10.208.211.62:8000/v1/chat/completions \
 Include the full conversation history in `messages` to maintain context.
 
 ```bash
-curl --noproxy '*' http://10.208.211.62:8000/v1/chat/completions \
+curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -152,7 +152,7 @@ Qwen3.6 supports a thinking mode where the model reasons step-by-step before pro
 
 **Enable thinking for a single request:**
 ```bash
-curl --noproxy '*' http://10.208.211.62:8000/v1/chat/completions \
+curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -167,7 +167,7 @@ curl --noproxy '*' http://10.208.211.62:8000/v1/chat/completions \
 
 **Disable thinking explicitly (standard response):**
 ```bash
-curl --noproxy '*' http://10.208.211.62:8000/v1/chat/completions \
+curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
@@ -194,7 +194,7 @@ The model supports vision (image + text) because it is loaded with a multimodal 
 # Encode image first
 IMAGE_B64=$(base64 -w 0 /path/to/your/image.jpg)
 
-curl --noproxy '*' http://10.208.211.62:8000/v1/chat/completions \
+curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d "{
@@ -220,7 +220,7 @@ with open("/path/to/image.jpg", "rb") as f:
     b64 = base64.b64encode(f.read()).decode()
 
 response = requests.post(
-    "http://10.208.211.62:8000/v1/chat/completions",
+    "http://10.208.211.62:18000/v1/chat/completions",
     headers={"Authorization": "Bearer YOUR_API_KEY"},
     json={
         "model": "qwen",
@@ -251,7 +251,7 @@ with open("plant_diagram.png", "rb") as f:
     b64 = base64.b64encode(f.read()).decode()
 
 response = requests.post(
-    "http://10.208.211.62:8000/v1/chat/completions",
+    "http://10.208.211.62:18000/v1/chat/completions",
     headers={"Authorization": "Bearer YOUR_API_KEY"},
     json={
         "model": "qwen",
@@ -289,7 +289,7 @@ b64_a = encode("before.jpg")
 b64_b = encode("after.jpg")
 
 response = requests.post(
-    "http://10.208.211.62:8000/v1/chat/completions",
+    "http://10.208.211.62:18000/v1/chat/completions",
     headers={"Authorization": "Bearer YOUR_API_KEY"},
     json={
         "model": "qwen",
@@ -365,7 +365,7 @@ import json, requests
 
 def stream_chat(prompt: str, api_key: str):
     response = requests.post(
-        "http://10.208.211.62:8000/v1/chat/completions",
+        "http://10.208.211.62:18000/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}"},
         json={
             "model": "qwen",
@@ -404,7 +404,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="YOUR_API_KEY",
-    base_url="http://10.208.211.62:8000/v1",
+    base_url="http://10.208.211.62:18000/v1",
     http_client=__import__("httpx").Client(proxies={}),  # bypass corporate proxy
 )
 

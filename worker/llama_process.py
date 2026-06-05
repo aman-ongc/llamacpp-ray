@@ -32,16 +32,16 @@ class LlamaServerProcess:
             str(settings.llama_parallel),
             "--no-context-shift",
             "--flash-attn",
-            "on",
+            "auto",
             "--cache-type-k",
-            "q8_0",
+            "q4_0",
             "--cache-type-v",
-            "q8_0",
+            "q4_0",
             "--cont-batching",
             "--spec-type",
             "draft-mtp",
             "--spec-draft-n-max",
-            "4",
+            "2",
         ]
 
     def start(self) -> None:

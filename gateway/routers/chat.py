@@ -1,6 +1,5 @@
 import json
 import time
-import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -30,7 +29,7 @@ router = APIRouter(prefix="/v1", tags=["chat"])
 
 class ChatMessage(BaseModel):
     role: str
-    content: str
+    content: str | list[dict[str, Any]]
 
 
 class ChatCompletionRequest(BaseModel):
@@ -54,7 +53,11 @@ def _payload_for_inference(payload: ChatCompletionRequest) -> dict[str, Any]:
     return data
 
 
+_MODEL_ALIAS = "qwen-3.6-35b"
+
+
 def _normalize_completion_response(result: dict[str, Any]) -> dict[str, Any]:
+    result["model"] = _MODEL_ALIAS
     for choice in result.get("choices", []):
         message = choice.get("message")
         if isinstance(message, dict) and not message.get("content"):
@@ -65,33 +68,28 @@ def _normalize_completion_response(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _rewrite_sse_model(line: str) -> str:
+    if not line.startswith("data: ") or line == "data: [DONE]":
+        return line
+    try:
+        chunk = json.loads(line[6:])
+        chunk["model"] = _MODEL_ALIAS
+        return f"data: {json.dumps(chunk)}"
+    except (json.JSONDecodeError, KeyError):
+        return line
+
+
 def _estimate_prompt_tokens(messages: list[ChatMessage]) -> int:
-    return max(1, sum(len(message.content.split()) for message in messages))
+    total = 0
+    for message in messages:
+        if isinstance(message.content, str):
+            total += len(message.content.split())
+        else:
+            for part in message.content:
+                if part.get("type") == "text":
+                    total += len(part.get("text", "").split())
+    return max(1, total)
 
-
-def _fallback_response(payload: ChatCompletionRequest) -> dict[str, Any]:
-    prompt = payload.messages[-1].content if payload.messages else ""
-    content = f"Ray Serve unavailable on controller; fallback response for prompt: {prompt[:80]}"
-    return {
-        "id": f"chatcmpl-{uuid.uuid4().hex}",
-        "object": "chat.completion",
-        "created": int(time.time()),
-        "model": payload.model,
-        "choices": [
-            {
-                "index": 0,
-                "message": {"role": "assistant", "content": content},
-                "finish_reason": "stop",
-            }
-        ],
-        "usage": {
-            "prompt_tokens": _estimate_prompt_tokens(payload.messages),
-            "completion_tokens": max(1, len(content.split())),
-            "total_tokens": _estimate_prompt_tokens(payload.messages) + max(1, len(content.split())),
-        },
-        "node_ip": settings.controller_node_ip,
-        "queue_ms": 0,
-    }
 
 
 @router.post("/chat/completions")
@@ -116,14 +114,9 @@ async def chat_completions(
     try:
         if payload.stream:
             async def event_stream():
-                try:
-                    async for chunk in stream_inference(_payload_for_inference(payload), affinity_key):
-                        yield chunk
-                except Exception:
-                    fallback = _fallback_response(payload)
-                    choice = fallback["choices"][0]["message"]["content"]
-                    yield f"data: {json.dumps({'choices': [{'delta': {'content': choice}, 'index': 0, 'finish_reason': None}]})}\n\n"
-                    yield "data: [DONE]\n\n"
+                async for chunk in stream_inference(_payload_for_inference(payload), affinity_key):
+                    line = chunk.rstrip("\n")
+                    yield f"{_rewrite_sse_model(line)}\n\n"
 
             response = StreamingResponse(event_stream(), media_type="text/event-stream")
             latency_ms = int((time.perf_counter() - start) * 1000)
@@ -149,12 +142,8 @@ async def chat_completions(
             PROMPT_TOKENS.labels(model=payload.model, username=user.username).inc(prompt_tokens)
             return response
 
-        try:
-            result = await submit_inference(_payload_for_inference(payload), affinity_key)
-        except Exception:
-            result = _fallback_response(payload)
-        else:
-            result = _normalize_completion_response(result)
+        result = await submit_inference(_payload_for_inference(payload), affinity_key)
+        result = _normalize_completion_response(result)
 
         usage = result.get("usage", {})
         prompt_tokens = int(usage.get("prompt_tokens", _estimate_prompt_tokens(payload.messages)))

@@ -28,7 +28,7 @@ Internal Users
       |
    NGINX (port 10080)          ← reverse proxy / ACL
       |
-FastAPI Gateway (port 8000)    ← auth, logging, rate-limiting, routing
+FastAPI Gateway (port 18000)   ← auth, logging, rate-limiting, routing
       |
 Ray Serve HTTP proxies (port 8001, one per node)
       |

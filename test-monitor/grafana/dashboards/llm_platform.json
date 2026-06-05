@@ -147,7 +147,7 @@
      "options":{"footer":{"show":false}},
      "fieldConfig":{"defaults":{"custom":{"align":"auto","cellOptions":{"type":"auto"},"filterable":true}}},
      "targets":[{"refId":"A","format":"table",
-       "rawSql":"SELECT u.username, u.department, COALESCE(r.api_key_prefix,'unknown') AS api_key_prefix, COUNT(*) AS requests, COALESCE(SUM(r.prompt_tokens),0) AS prompt_tokens, COALESCE(SUM(r.completion_tokens),0) AS completion_tokens, COALESCE(SUM(r.prompt_tokens+r.completion_tokens),0) AS total_tokens, ROUND(AVG(r.latency_ms)::numeric,0) AS avg_latency_ms, MAX(r.created_at) AS last_request_at FROM request_logs r LEFT JOIN users u ON r.user_id=u.id WHERE $__timeFilter(r.created_at) GROUP BY u.username, u.department, r.api_key_prefix ORDER BY requests DESC LIMIT 50",
+       "rawSql":"SELECT CASE WHEN ak.label IS NULL OR ak.label='' OR ak.label='default' THEN 'admin' ELSE ak.label END AS name, COALESCE(r.api_key_prefix,'unknown') AS api_key_prefix, COUNT(*) AS requests, COALESCE(SUM(r.prompt_tokens),0) AS prompt_tokens, COALESCE(SUM(r.completion_tokens),0) AS completion_tokens, COALESCE(SUM(r.prompt_tokens+r.completion_tokens),0) AS total_tokens, ROUND(AVG(r.latency_ms)::numeric,0) AS avg_latency_ms, MAX(r.created_at) AS last_request_at FROM request_logs r LEFT JOIN users u ON r.user_id=u.id LEFT JOIN api_keys ak ON r.api_key_prefix=ak.key_prefix WHERE $__timeFilter(r.created_at) GROUP BY ak.label, r.api_key_prefix ORDER BY requests DESC LIMIT 50",
        "datasource":{"type":"postgres","uid":"llm-postgres"}}]},
 
     {"id":14,"title":"Requests by Node (DB)","type":"barchart",
@@ -165,7 +165,7 @@
      "options":{"footer":{"show":false}},
      "fieldConfig":{"defaults":{"custom":{"align":"auto","cellOptions":{"type":"auto"}}}},
      "targets":[{"refId":"A","format":"table",
-       "rawSql":"SELECT r.created_at, u.username, r.node_ip, r.status_code, r.latency_ms, r.error_message FROM request_logs r LEFT JOIN users u ON r.user_id=u.id WHERE r.status_code!=200 AND $__timeFilter(r.created_at) ORDER BY r.created_at DESC LIMIT 30",
+       "rawSql":"SELECT r.created_at, CASE WHEN ak.label IS NULL OR ak.label='' OR ak.label='default' THEN 'admin' ELSE ak.label END AS name, r.node_ip, r.status_code, r.latency_ms, r.error_message FROM request_logs r LEFT JOIN users u ON r.user_id=u.id LEFT JOIN api_keys ak ON r.api_key_prefix=ak.key_prefix WHERE r.status_code!=200 AND $__timeFilter(r.created_at) ORDER BY r.created_at DESC LIMIT 30",
        "datasource":{"type":"postgres","uid":"llm-postgres"}}]}
 
   ]

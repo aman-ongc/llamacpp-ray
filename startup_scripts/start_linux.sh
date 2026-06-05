@@ -66,7 +66,7 @@ else
 fi
 
 # ── Step 1: Docker Compose ────────────────────────────────────────────────────
-info "Step 1/4 — Starting Docker Compose stack..."
+info "Step 1/3 — Starting Docker Compose stack..."
 cd "$PROJECT_DIR"
 
 if ! command -v docker &> /dev/null; then
@@ -80,52 +80,17 @@ info "Waiting for gateway container..."
 wait_for_http "http://${CONTROLLER_IP}:18000/health" "Gateway" 30
 ok "Docker stack ready"
 
-# ── Step 2: llama.cpp server ──────────────────────────────────────────────────
-info "Step 2/4 — Checking llama.cpp server..."
-if curl --noproxy '*' -sf "http://${CONTROLLER_IP}:${LLAMA_PORT}/health" > /dev/null 2>&1; then
-    ok "llama.cpp already running on port ${LLAMA_PORT}"
-else
-    warn "llama.cpp not running. Starting..."
-    if [[ ! -x "$LLAMA_SERVER" ]]; then
-        die "llama-server binary not found at: $LLAMA_SERVER"
-    fi
-    if [[ ! -f "$LLAMA_MODEL" ]]; then
-        die "Model file not found at: $LLAMA_MODEL"
-    fi
-
-    nohup "$LLAMA_SERVER" \
-        -m "$LLAMA_MODEL" \
-        --mmproj "$LLAMA_MMPROJ" \
-        -ngl 999 \
-        -c 65536 \
-        --host "$CONTROLLER_IP" \
-        --port "$LLAMA_PORT" \
-        --parallel 2 \
-        --no-context-shift \
-        --flash-attn on \
-        --cache-type-k q8_0 \
-        --cache-type-v q8_0 \
-        --cont-batching \
-        --spec-type draft-mtp \
-        --spec-draft-n-max 4 \
-        > /tmp/llama-server.log 2>&1 &
-
-    info "Waiting for llama.cpp to load model (this can take 30-90s)..."
-    wait_for_http "http://${CONTROLLER_IP}:${LLAMA_PORT}/health" "llama.cpp" 60
-fi
-
-# ── Step 3: Ray head + Serve ──────────────────────────────────────────────────
-info "Step 3/4 — Starting Ray head and Ray Serve..."
+# ── Step 2: Ray head + Serve ──────────────────────────────────────────────────
+info "Step 2/3 — Starting Ray head (WS-11 acts as both controller and inference worker)..."
 if [[ ! -d "$VENV_DIR" ]]; then
     die "Python venv not found at: $VENV_DIR"
 fi
 source "${VENV_DIR}/bin/activate"
 
 info "Ensuring Ray/Serve ports are free before starting..."
-# Kill any lingering Ray/Serve processes first
 pkill -f "raylet" 2>/dev/null || true
 pkill -f "ray::" 2>/dev/null || true
-pkill -f "serve" 2>/dev/null || true
+pkill -f "ray::Serve" 2>/dev/null || true
 pkill -f "gcs_server" 2>/dev/null || true
 pkill -f "plasma_store" 2>/dev/null || true
 sleep 1
@@ -140,12 +105,32 @@ for port in 8001 "${RAY_PORT}"; do
     fi
 done
 
+# Start llama.cpp on WS-11 first (Ray Serve replica on this node needs it)
+if ! curl --noproxy '*' -sf "http://${CONTROLLER_IP}:${LLAMA_PORT}/health" >/dev/null 2>&1; then
+    info "Starting llama.cpp on WS-11..."
+    nohup "$LLAMA_SERVER" \
+        -m "$LLAMA_MODEL" \
+        --mmproj "$LLAMA_MMPROJ" \
+        -ngl 999 -c 65536 \
+        --host "$CONTROLLER_IP" --port "$LLAMA_PORT" \
+        --parallel 1 --no-context-shift \
+        --flash-attn auto --cache-type-k q4_0 --cache-type-v q4_0 \
+        --cont-batching \
+        --spec-type draft-mtp --spec-draft-n-max 2 \
+        >/tmp/llama-server-ws11.log 2>&1 &
+    ok "llama.cpp launched on WS-11 (log: /tmp/llama-server-ws11.log)"
+else
+    ok "llama.cpp already running on WS-11"
+fi
+
+# Head node gets 1 GPU + 6 CPUs so Ray Serve schedules a replica here too.
 if ray status --address "${CONTROLLER_IP}:${RAY_PORT}" > /dev/null 2>&1; then
     ok "Ray head already running"
 else
-    info "Starting Ray head node..."
+    info "Starting Ray head node (1 GPU, 6 CPUs — head + inference worker)..."
     ray start \
         --head \
+        --node-ip-address="${CONTROLLER_IP}" \
         --port="${RAY_PORT}" \
         --dashboard-host=0.0.0.0 \
         --dashboard-port=8265 \
@@ -154,23 +139,26 @@ else
     sleep 4
 fi
 
-info "Starting worker nodes (WS-03, WS-08, WS-13) in parallel..."
+info "Starting remote worker nodes (WS-03, WS-08, WS-13) in parallel..."
+# 4 nodes total: WS-11 (head+worker) + WS-03 + WS-08 + WS-13
 WORKER_NODES=("10.208.211.54" "10.208.211.59" "10.208.211.64")
 for worker in "${WORKER_NODES[@]}"; do
     info "  Launching worker ${worker}..."
     MODEL_PATH="$LLAMA_MODEL" \
     MMPROJ_PATH="$LLAMA_MMPROJ" \
+    LLAMA_SERVER="$LLAMA_SERVER" \
     RAY_HEAD_IP="$CONTROLLER_IP" \
     bash "$PROJECT_DIR/scripts/start_linux_worker.sh" "$worker" \
         > "/tmp/worker-${worker}.log" 2>&1 &
 done
 
-info "Waiting for workers to join cluster (up to 120s)..."
+info "Waiting for all 4 nodes to join cluster (up to 120s)..."
+# head counts as node 1; need head + 3 workers = 4
 for i in {1..24}; do
     node_count=$(ray status --address "${CONTROLLER_IP}:${RAY_PORT}" 2>/dev/null \
-        | grep -c "^1 " || true)
-    if [[ "$node_count" -ge 3 ]]; then
-        ok "All 3 workers joined Ray cluster"
+        | grep -cE "node_[0-9a-f]+" || true)
+    if [[ "$node_count" -ge 4 ]]; then
+        ok "All 4 nodes active: WS-11 (head+worker) + WS-03 + WS-08 + WS-13"
         break
     fi
     sleep 5
@@ -183,8 +171,8 @@ python scripts/deploy_serve.py
 
 wait_for_http "http://${CONTROLLER_IP}:${SERVE_PORT}/health" "Ray Serve" 20
 
-# ── Step 4: Verify end-to-end ─────────────────────────────────────────────────
-info "Step 4/4 — End-to-end verification..."
+# ── Step 3: Verify end-to-end ─────────────────────────────────────────────────
+info "Step 3/3 — End-to-end verification..."
 wait_for_http "http://${CONTROLLER_IP}:10080/health" "NGINX → Gateway" 15
 
 # ── Summary ───────────────────────────────────────────────────────────────────

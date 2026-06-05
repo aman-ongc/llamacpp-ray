@@ -527,7 +527,7 @@ async def _streaming_request(
 # ---------------------------------------------------------------------------
 
 
-async def check_ray_serve_distribution(n: int = 12) -> dict[str, int]:
+async def check_ray_serve_distribution(n: int = 6) -> dict[str, int]:
     dist: dict[str, int] = defaultdict(int)
     async with _make_client(timeout=10.0) as client:
         results = await asyncio.gather(
@@ -569,7 +569,7 @@ def _print_distribution(dist: dict[str, int]) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def run_short_text(api_key: str, n: int = 5) -> BenchmarkStats:
+async def run_short_text(api_key: str, n: int = 3) -> BenchmarkStats:
     stats = BenchmarkStats("Short text — sequential baseline", concurrency=1)
     print(f"  {n} sequential requests, short prompt (max_tokens=16)...", flush=True)
     async with _make_client() as client:
@@ -587,7 +587,7 @@ async def run_short_text(api_key: str, n: int = 5) -> BenchmarkStats:
 # ---------------------------------------------------------------------------
 
 
-async def run_long_text(api_key: str, n: int = 3) -> BenchmarkStats:
+async def run_long_text(api_key: str, n: int = 2) -> BenchmarkStats:
     stats = BenchmarkStats("Long text — sequential (max_tokens=512)", concurrency=1)
     print(f"  {n} sequential requests, long prompt (max_tokens=512)...", flush=True)
     async with _make_client() as client:
@@ -645,7 +645,7 @@ async def run_multi_turn(api_key: str) -> BenchmarkStats:
 # ---------------------------------------------------------------------------
 
 
-async def run_thinking_comparison(api_key: str, n: int = 3) -> tuple[BenchmarkStats, BenchmarkStats]:
+async def run_thinking_comparison(api_key: str, n: int = 2) -> tuple[BenchmarkStats, BenchmarkStats]:
     on = BenchmarkStats("Thinking ON  (enable_thinking=True,  max_tokens=1024)", concurrency=1)
     off = BenchmarkStats("Thinking OFF (enable_thinking=False, max_tokens=256)", concurrency=1)
 
@@ -680,7 +680,7 @@ async def run_thinking_comparison(api_key: str, n: int = 3) -> tuple[BenchmarkSt
 # ---------------------------------------------------------------------------
 
 
-async def run_affinity_comparison(api_key: str, n: int = 8) -> tuple[BenchmarkStats, BenchmarkStats]:
+async def run_affinity_comparison(api_key: str, n: int = 4) -> tuple[BenchmarkStats, BenchmarkStats]:
     with_a = BenchmarkStats("Session affinity ON  — sticky routing, same node", concurrency=1)
     no_a = BenchmarkStats("Session affinity OFF — spread across workers", concurrency=1)
 
@@ -743,7 +743,7 @@ SAMPLING_PRESETS = [
 ]
 
 
-async def run_sampling_presets(api_key: str, n: int = 2) -> list[BenchmarkStats]:
+async def run_sampling_presets(api_key: str, n: int = 1) -> list[BenchmarkStats]:
     all_stats: list[BenchmarkStats] = []
     async with _make_client() as client:
         for preset in SAMPLING_PRESETS:
@@ -774,7 +774,7 @@ async def run_sampling_presets(api_key: str, n: int = 2) -> list[BenchmarkStats]
 # ---------------------------------------------------------------------------
 
 
-async def run_streaming_ttft(api_key: str, n: int = 4, thinking: bool = False) -> BenchmarkStats:
+async def run_streaming_ttft(api_key: str, n: int = 2, thinking: bool = False) -> BenchmarkStats:
     label = f"Streaming TTFT — thinking={'ON' if thinking else 'OFF'}  ({n} concurrent)"
     stats = BenchmarkStats(label, concurrency=n)
     prompt = PROMPT_MATH if thinking else PROMPT_MEDIUM
@@ -855,7 +855,7 @@ async def run_queue_pressure(api_key: str) -> list[BenchmarkStats]:
     """
     all_stats: list[BenchmarkStats] = []
     for c in [2, 4, 8, 12]:
-        n = c * 2
+        n = c
         s = await _run_concurrent_batch(
             api_key, concurrency=c, n=n,
             payload_fn=lambda: _chat_payload(_user_msg(PROMPT_MEDIUM), max_tokens=96),
@@ -873,7 +873,7 @@ async def run_queue_pressure(api_key: str) -> list[BenchmarkStats]:
 async def run_throughput_ramp(api_key: str) -> list[BenchmarkStats]:
     all_stats: list[BenchmarkStats] = []
     for c in [1, 2, 4, 8]:
-        n = max(c * 3, 6)
+        n = max(c * 2, 4)
         s = await _run_concurrent_batch(
             api_key, concurrency=c, n=n,
             payload_fn=lambda: _chat_payload(_user_msg(PROMPT_MEDIUM), max_tokens=96),
@@ -912,7 +912,7 @@ async def run_throughput_ramp(api_key: str) -> list[BenchmarkStats]:
 #   Concurrent  → D much faster wall-time than C; C shows high p95/p99
 
 
-async def run_routing_comparison(api_key: str, n: int = 8) -> list[BenchmarkStats]:
+async def run_routing_comparison(api_key: str, n: int = 4) -> list[BenchmarkStats]:
     """
     Runs all four routing sub-scenarios and returns them in order
     [seq_same, seq_rr, conc_same, conc_rr] for side-by-side printing.
@@ -1057,7 +1057,7 @@ async def run_image_single(api_key: str, image_path: Optional[str] = None) -> Be
     """Single image + question — tests vision pathway latency."""
     stats = BenchmarkStats("Vision — single image input", concurrency=1)
     b64 = _load_or_generate_image(image_path, "image")
-    n = 3
+    n = 2
     print(f"  {n} requests, single image + question...", flush=True)
     async with _make_client() as client:
         t0 = time.perf_counter()
@@ -1078,7 +1078,7 @@ async def run_image_plus_text(api_key: str, image_path: Optional[str] = None) ->
     b64 = _load_or_generate_image(image_path, "image")
     system = "You are a visual analysis assistant. Describe images precisely and concisely."
     question = "Describe the colors, shapes, and any patterns visible in this image."
-    n = 3
+    n = 2
     print(f"  {n} requests, image + text + system prompt...", flush=True)
     async with _make_client() as client:
         t0 = time.perf_counter()
@@ -1102,7 +1102,7 @@ async def run_image_multi(
     stats = BenchmarkStats("Vision — two images in one request", concurrency=1)
     b64_a = _load_or_generate_image(image_path, "image 1")
     b64_b = _load_or_generate_image(image_path2, "image 2")
-    n = 2
+    n = 1
     print(f"  {n} requests, two images per request...", flush=True)
     async with _make_client() as client:
         t0 = time.perf_counter()
@@ -1122,7 +1122,7 @@ async def run_image_thinking(api_key: str, image_path: Optional[str] = None) -> 
     stats = BenchmarkStats("Vision — image + thinking ON (enable_thinking=True)", concurrency=1)
     b64 = _load_or_generate_image(image_path, "image")
     question = "Look at this image carefully. What objects, colors, and patterns do you see? Think step by step."
-    n = 2
+    n = 1
     print(f"  {n} requests, image + enable_thinking=True...", flush=True)
 
     payload = _image_payload(b64, question, max_tokens=1024)
@@ -1173,7 +1173,7 @@ async def main(args: argparse.Namespace) -> None:
     # Ray Serve distribution
     if run_all or mode == "distribution":
         print("\n[ distribution ] Ray Serve replica spread...")
-        dist = await check_ray_serve_distribution(n=12)
+        dist = await check_ray_serve_distribution(n=6)
         _print_distribution(dist)
         if mode == "distribution":
             return
@@ -1181,11 +1181,11 @@ async def main(args: argparse.Namespace) -> None:
     # Text: short + long
     if run_all or mode == "text":
         print("\n[ text ] Short text — sequential baseline...")
-        s = await run_short_text(args.api_key, n=max(n, 5))
+        s = await run_short_text(args.api_key, n=max(n, 3))
         s.print()
 
         print("\n[ text ] Long text — sequential...")
-        s = await run_long_text(args.api_key, n=3)
+        s = await run_long_text(args.api_key, n=2)
         s.print()
 
     # Multi-turn
@@ -1197,7 +1197,7 @@ async def main(args: argparse.Namespace) -> None:
     # Thinking
     if run_all or mode == "thinking":
         print("\n[ thinking ] Thinking ON vs OFF on the same prompt...")
-        on, off = await run_thinking_comparison(args.api_key, n=max(n // 2, 2))
+        on, off = await run_thinking_comparison(args.api_key, n=max(n // 2, 1))
         on.print()
         off.print()
         _print_comparison("thinking=ON", on, "thinking=OFF", off)
@@ -1205,7 +1205,7 @@ async def main(args: argparse.Namespace) -> None:
     # Session affinity
     if run_all or mode == "affinity":
         print("\n[ affinity ] Session affinity ON vs OFF...")
-        with_a, no_a = await run_affinity_comparison(args.api_key, n=max(n, 8))
+        with_a, no_a = await run_affinity_comparison(args.api_key, n=max(n, 4))
         with_a.print()
         no_a.print()
         _print_comparison("affinity=ON", with_a, "affinity=OFF", no_a)
@@ -1215,7 +1215,7 @@ async def main(args: argparse.Namespace) -> None:
         print("\n[ sampling ] Sampling parameter presets...")
         print("  Note: top_p/top_k/min_p/repeat_penalty require gateway schema update to take effect.")
         print("        temperature comparisons are always meaningful.\n")
-        sampling_stats = await run_sampling_presets(args.api_key, n=2)
+        sampling_stats = await run_sampling_presets(args.api_key, n=1)
         for s in sampling_stats:
             s.print()
         _print_throughput_table(sampling_stats)
@@ -1223,11 +1223,11 @@ async def main(args: argparse.Namespace) -> None:
     # Streaming
     if run_all or mode == "streaming":
         print("\n[ streaming ] Streaming TTFT — thinking OFF...")
-        s_off = await run_streaming_ttft(args.api_key, n=min(4, n), thinking=False)
+        s_off = await run_streaming_ttft(args.api_key, n=min(2, n), thinking=False)
         s_off.print()
 
         print("\n[ streaming ] Streaming TTFT — thinking ON...")
-        s_on = await run_streaming_ttft(args.api_key, n=min(4, n), thinking=True)
+        s_on = await run_streaming_ttft(args.api_key, n=min(2, n), thinking=True)
         s_on.print()
 
         _print_comparison("stream thinking=OFF", s_off, "stream thinking=ON", s_on)
@@ -1244,7 +1244,7 @@ async def main(args: argparse.Namespace) -> None:
         print("  Cluster: 4 nodes x 2 parallel slots = 8 total concurrent slots.")
         print("  affinity=True  → all requests pin to one worker (2 slots, rest queue).")
         print("  affinity=False → load-balanced across all workers (8 slots available).\n")
-        routing_stats = await run_routing_comparison(args.api_key, n=max(n, 8))
+        routing_stats = await run_routing_comparison(args.api_key, n=max(n, 4))
         for s in routing_stats:
             s.print()
         _print_routing_summary(routing_stats)
@@ -1312,7 +1312,7 @@ def parse_args() -> argparse.Namespace:
         default="all",
         help="Benchmark mode (default: all)",
     )
-    p.add_argument("--requests",    type=int,   default=8,           help="Requests per scenario where applicable")
+    p.add_argument("--requests",    type=int,   default=4,           help="Requests per scenario where applicable")
     p.add_argument("--concurrency", type=int,   default=4,           help="Concurrency for --mode concurrent")
     p.add_argument("--image",       default=None,                    help="Image file path for vision tests")
     p.add_argument("--image2",      default=None,                    help="Second image path for multi-image test")

@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     llama_mmproj_path: str = "/mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/mmproj-F16.gguf"
     llama_port: int = 8080
     llama_context: int = 65536
-    llama_parallel: int = 2
+    llama_parallel: int = 1
     llama_ngl: int = 999
 
     # Qwen3.6 thinking mode — off by default; set ENABLE_THINKING=true to enable

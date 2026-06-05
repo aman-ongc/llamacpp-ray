@@ -20,6 +20,7 @@ if ! ray status --address "${RAY_HEAD_IP}:${RAY_PORT}" > /dev/null 2>&1; then
   echo "[controller] Starting Ray head..."
   ray start \
     --head \
+    --node-ip-address="${RAY_HEAD_IP}" \
     --port="${RAY_PORT}" \
     --dashboard-host=0.0.0.0 \
     --dashboard-port=8265 \

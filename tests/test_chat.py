@@ -94,6 +94,53 @@ def test_session_affinity_excluded_from_payload():
     assert "session_affinity" not in data
 
 
+def test_chat_message_accepts_list_content():
+    """Image/vision requests send content as a list of parts."""
+    msg = ChatMessage(
+        role="user",
+        content=[
+            {"type": "text", "text": "What's in this image?"},
+            {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,abc123"}},
+        ],
+    )
+    assert isinstance(msg.content, list)
+    assert len(msg.content) == 2
+
+
+def test_estimate_prompt_tokens_with_image_content():
+    from gateway.routers.chat import _estimate_prompt_tokens
+    messages = [
+        ChatMessage(
+            role="user",
+            content=[
+                {"type": "text", "text": "hello world"},
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,abc"}},
+            ],
+        )
+    ]
+    tokens = _estimate_prompt_tokens(messages)
+    assert tokens >= 1
+
+
+def test_payload_for_inference_image_request():
+    payload = ChatCompletionRequest(
+        messages=[
+            ChatMessage(
+                role="user",
+                content=[
+                    {"type": "text", "text": "describe this"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,xyz"}},
+                ],
+            )
+        ]
+    )
+    data = _payload_for_inference(payload)
+    assert data["messages"][0]["content"] == [
+        {"type": "text", "text": "describe this"},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,xyz"}},
+    ]
+
+
 def test_normalize_completion_response_removes_reasoning_content():
     result = {
         "choices": [

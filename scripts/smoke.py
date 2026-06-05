@@ -35,7 +35,7 @@ def request_json(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default="http://127.0.0.1:8000")
+    parser.add_argument("--base-url", default="http://127.0.0.1:18000")
     parser.add_argument("--admin-secret", default=os.getenv("ADMIN_SECRET", "changeme"))
     parser.add_argument("--api-key", required=True)
     parser.add_argument("--skip-admin", action="store_true")
