@@ -11,12 +11,28 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from gateway.config import settings
 
+# WS-13: multimodal node running Qwen3-VL on port 8080.
+# All other nodes are text nodes running Gemma on port 8080.
+_MULTIMODAL_NODE_IP = settings.multimodal_node_ip
 
-@serve.deployment(num_replicas=settings.serve_replicas, ray_actor_options={"num_gpus": 1, "num_cpus": 1})
-class LlamaCppWorker:
-    def __init__(self, node_ip: str | None = None) -> None:
-        self.node_ip = node_ip or get_node_ip_address() or socket.gethostbyname(socket.gethostname())
-        self.base_url = f"http://{self.node_ip}:{settings.llama_port}"
+
+def _resolve_node_ip() -> str:
+    return get_node_ip_address() or socket.gethostbyname(socket.gethostname())
+
+
+def _llama_port_for_node(node_ip: str) -> int:
+    if node_ip == _MULTIMODAL_NODE_IP:
+        return settings.multimodal_llama_port
+    return settings.text_llama_port
+
+
+class _LlamaWorkerBase:
+    """Shared HTTP proxy logic for both text and multimodal workers."""
+
+    def __init__(self) -> None:
+        self.node_ip = _resolve_node_ip()
+        port = _llama_port_for_node(self.node_ip)
+        self.base_url = f"http://{self.node_ip}:{port}"
 
     def _timeout(self) -> httpx.Timeout:
         return httpx.Timeout(
@@ -27,11 +43,12 @@ class LlamaCppWorker:
         )
 
     async def __call__(self, request: Request) -> Response:
-        """HTTP ingress for Ray Serve. Routes to health or chat."""
+        # Ray Serve passes the FULL path including route prefix (/text/... or /multimodal/...).
+        # Use endswith so both prefixed and un-prefixed calls work.
         path = request.url.path.rstrip("/")
-        if path in ("/health", ""):
+        if path in ("/health", "") or path.endswith("/health"):
             return JSONResponse(await self.health())
-        if path == "/v1/chat/completions":
+        if path == "/v1/chat/completions" or path.endswith("/v1/chat/completions"):
             try:
                 payload = await request.json()
             except Exception:
@@ -79,4 +96,27 @@ class LlamaCppWorker:
                         yield f"{line}\n\n"
 
 
-app = LlamaCppWorker.bind()
+# Replicas pinned to text nodes via custom Ray resource "text_node".
+# Text nodes (WS-11, WS-03, WS-08) must be started with --resources='{"text_node": 1}'.
+@serve.deployment(
+    num_replicas=settings.text_serve_replicas,
+    ray_actor_options={"num_cpus": 1, "resources": {"text_node": 0.01}},
+)
+class TextWorker(_LlamaWorkerBase):
+    def __init__(self) -> None:
+        super().__init__()
+
+
+# Replica pinned to multimodal node via custom Ray resource "multimodal_node".
+# WS-13 must be started with --resources='{"multimodal_node": 1}'.
+@serve.deployment(
+    num_replicas=settings.multimodal_serve_replicas,
+    ray_actor_options={"num_cpus": 1, "resources": {"multimodal_node": 0.01}},
+)
+class MultimodalWorker(_LlamaWorkerBase):
+    def __init__(self) -> None:
+        super().__init__()
+
+
+text_app = TextWorker.bind()
+multimodal_app = MultimodalWorker.bind()

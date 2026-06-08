@@ -23,55 +23,66 @@ def _transport() -> httpx.AsyncHTTPTransport:
     return httpx.AsyncHTTPTransport(retries=0)
 
 
-def _build_proxy_urls() -> list[str]:
+def _build_text_proxy_urls() -> list[str]:
     """
-    All Ray Serve HTTP proxies — one per cluster node, all on the same port.
-    Locality routing means each proxy prefers the replica on its own node,
-    so round-robining across proxy URLs gives even distribution across nodes.
+    Ray Serve HTTP proxies for text nodes (WS-11, WS-03, WS-08).
+    All on port 8001. Round-robin / affinity distributes across Gemma nodes.
     """
     serve_port = settings.ray_serve_url.split(":")[-1].rstrip("/")
-    all_ips = [settings.controller_node_ip] + [
-        ip.strip() for ip in settings.worker_node_ips.split(",") if ip.strip()
-    ]
-    return [f"http://{ip}:{serve_port}" for ip in all_ips]
+    ips = [ip.strip() for ip in settings.text_node_ips.split(",") if ip.strip()]
+    return [f"http://{ip}:{serve_port}" for ip in ips]
 
 
-_proxy_urls: list[str] = _build_proxy_urls()
-
-# Infinite round-robin iterator — thread-safe reads for asyncio (GIL protected).
-_proxy_cycle = itertools.cycle(_proxy_urls)
-
-
-def _next_proxy_url() -> str:
-    return next(_proxy_cycle)
+def _build_multimodal_proxy_url() -> str:
+    """Single Ray Serve HTTP proxy for WS-13 (Qwen3-VL multimodal node)."""
+    serve_port = settings.ray_serve_url.split(":")[-1].rstrip("/")
+    return f"http://{settings.multimodal_node_ip}:{serve_port}"
 
 
-def _affinity_proxy_url(key: str) -> str:
-    """Return a deterministic proxy URL for the given affinity key.
+_text_proxy_urls: list[str] = _build_text_proxy_urls()
+_multimodal_proxy_url: str = _build_multimodal_proxy_url()
 
-    Uses hash(key) % num_nodes so the same API key always maps to the same
-    Ray Serve proxy, and therefore the same GPU replica. This lets llama.cpp
-    reuse its KV cache across consecutive requests from the same user.
+# Infinite round-robin over text nodes — GIL-safe for asyncio.
+_text_proxy_cycle = itertools.cycle(_text_proxy_urls)
+
+
+def _next_text_proxy_url() -> str:
+    return next(_text_proxy_cycle)
+
+
+def _affinity_text_proxy_url(key: str) -> str:
+    """Deterministic proxy URL for a given affinity key.
+
+    Same API key prefix always maps to the same Gemma node so llama.cpp
+    can reuse its KV cache across consecutive requests from that user.
     """
-    return _proxy_urls[hash(key) % len(_proxy_urls)]
+    return _text_proxy_urls[hash(key) % len(_text_proxy_urls)]
 
 
-def _select_proxy_url(affinity_key: str | None) -> str:
+def _select_text_proxy_url(affinity_key: str | None) -> str:
     if affinity_key:
-        return _affinity_proxy_url(affinity_key)
-    return _next_proxy_url()
+        return _affinity_text_proxy_url(affinity_key)
+    return _next_text_proxy_url()
+
+
+def _set_no_proxy() -> None:
+    env = {"NO_PROXY": settings.no_proxy, "no_proxy": settings.no_proxy}
+    os.environ.update(env)
 
 
 async def submit_inference(
     payload: dict[str, Any],
     affinity_key: str | None = None,
+    multimodal: bool = False,
 ) -> dict[str, Any]:
     headers = {"Content-Type": "application/json"}
     payload = dict(payload)
-    payload["stream"] = False  # always non-streaming; caller must use stream_inference for SSE
-    env = {"NO_PROXY": settings.no_proxy, "no_proxy": settings.no_proxy}
-    os.environ.update(env)
-    url = f"{_select_proxy_url(affinity_key)}/v1/chat/completions"
+    payload["stream"] = False
+    _set_no_proxy()
+    if multimodal:
+        url = f"{_multimodal_proxy_url}/multimodal/v1/chat/completions"
+    else:
+        url = f"{_select_text_proxy_url(affinity_key)}/text/v1/chat/completions"
     async with httpx.AsyncClient(timeout=_timeout(), transport=_transport(), trust_env=True) as client:
         response = await client.post(url, json=payload, headers=headers)
         if response.is_error:
@@ -86,13 +97,16 @@ async def submit_inference(
 async def stream_inference(
     payload: dict[str, Any],
     affinity_key: str | None = None,
+    multimodal: bool = False,
 ) -> AsyncIterator[str]:
     headers = {"Content-Type": "application/json"}
     payload = dict(payload)
     payload["stream"] = True
-    env = {"NO_PROXY": settings.no_proxy, "no_proxy": settings.no_proxy}
-    os.environ.update(env)
-    url = f"{_select_proxy_url(affinity_key)}/v1/chat/completions"
+    _set_no_proxy()
+    if multimodal:
+        url = f"{_multimodal_proxy_url}/multimodal/v1/chat/completions"
+    else:
+        url = f"{_select_text_proxy_url(affinity_key)}/text/v1/chat/completions"
     async with httpx.AsyncClient(timeout=_timeout(), transport=_transport(), trust_env=True) as client:
         async with client.stream("POST", url, json=payload, headers=headers) as response:
             response.raise_for_status()

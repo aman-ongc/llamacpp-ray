@@ -38,32 +38,33 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: int = 256
     temperature: float = 0.7
     stream: bool = False
-    # Per-request thinking override. None = use global ENABLE_THINKING setting.
-    enable_thinking: bool | None = Field(default=None, exclude=True)
     # When True, all requests from the same API key go to the same Ray worker
-    # so llama.cpp can reuse its KV cache across turns. Defaults to False;
-    # set explicitly in the request to enable sticky routing.
+    # so llama.cpp can reuse its KV cache across turns.
     session_affinity: bool = Field(default=False, exclude=True)
 
 
+def _is_multimodal_request(messages: list[ChatMessage]) -> bool:
+    """Return True if any message contains image content parts."""
+    for message in messages:
+        if isinstance(message.content, list):
+            for part in message.content:
+                if isinstance(part, dict) and part.get("type") in ("image_url", "image"):
+                    return True
+    return False
+
+
 def _payload_for_inference(payload: ChatCompletionRequest) -> dict[str, Any]:
-    data = payload.model_dump(exclude={"enable_thinking", "session_affinity"})
-    thinking = payload.enable_thinking if payload.enable_thinking is not None else settings.enable_thinking
-    data["chat_template_kwargs"] = {"enable_thinking": thinking}
-    return data
+    return payload.model_dump(exclude={"session_affinity"})
 
 
-_MODEL_ALIAS = "qwen-3.6-35b"
+_MODEL_ALIAS = "ongc-llm"
 
 
 def _normalize_completion_response(result: dict[str, Any]) -> dict[str, Any]:
     result["model"] = _MODEL_ALIAS
     for choice in result.get("choices", []):
         message = choice.get("message")
-        if isinstance(message, dict) and not message.get("content"):
-            reasoning = message.pop("reasoning_content", None)
-            message["content"] = "" if reasoning is None else str(reasoning).strip()
-        elif isinstance(message, dict):
+        if isinstance(message, dict):
             message.pop("reasoning_content", None)
     return result
 
@@ -91,7 +92,6 @@ def _estimate_prompt_tokens(messages: list[ChatMessage]) -> int:
     return max(1, total)
 
 
-
 @router.post("/chat/completions")
 async def chat_completions(
     payload: ChatCompletionRequest,
@@ -107,14 +107,18 @@ async def chat_completions(
     except RedisError:
         pass
 
-    affinity_key = api_key_prefix if payload.session_affinity else None
+    multimodal = _is_multimodal_request(payload.messages)
+    # Affinity only applies to text pool (multimodal pool is a single node).
+    affinity_key = api_key_prefix if (payload.session_affinity and not multimodal) else None
 
     start = time.perf_counter()
     ACTIVE_REQUESTS.inc()
     try:
         if payload.stream:
             async def event_stream():
-                async for chunk in stream_inference(_payload_for_inference(payload), affinity_key):
+                async for chunk in stream_inference(
+                    _payload_for_inference(payload), affinity_key, multimodal=multimodal
+                ):
                     line = chunk.rstrip("\n")
                     yield f"{_rewrite_sse_model(line)}\n\n"
 
@@ -125,8 +129,8 @@ async def chat_completions(
                 session,
                 user=user,
                 api_key_prefix=api_key_prefix,
-                model=payload.model,
-                node_ip=settings.controller_node_ip,
+                model=_MODEL_ALIAS,
+                node_ip=settings.multimodal_node_ip if multimodal else settings.controller_node_ip,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=0,
                 latency_ms=latency_ms,
@@ -135,14 +139,15 @@ async def chat_completions(
                 error_message=None,
                 streaming=True,
             )
-            # node_ip is unknown for streaming (SSE proxied before node responds);
-            # use "stream" as a sentinel so per-node dashboards stay clean.
-            REQUEST_COUNT.labels(model=payload.model, status_code="200", streaming="true", username=user.username, node_ip="stream").inc()
-            REQUEST_LATENCY_MS.labels(model=payload.model, username=user.username, node_ip="stream").observe(latency_ms)
-            PROMPT_TOKENS.labels(model=payload.model, username=user.username).inc(prompt_tokens)
+            node_ip_label = settings.multimodal_node_ip if multimodal else "stream"
+            REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="true", username=user.username, node_ip=node_ip_label).inc()
+            REQUEST_LATENCY_MS.labels(model=_MODEL_ALIAS, username=user.username, node_ip=node_ip_label).observe(latency_ms)
+            PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username).inc(prompt_tokens)
             return response
 
-        result = await submit_inference(_payload_for_inference(payload), affinity_key)
+        result = await submit_inference(
+            _payload_for_inference(payload), affinity_key, multimodal=multimodal
+        )
         result = _normalize_completion_response(result)
 
         usage = result.get("usage", {})
@@ -156,7 +161,7 @@ async def chat_completions(
             session,
             user=user,
             api_key_prefix=api_key_prefix,
-            model=payload.model,
+            model=_MODEL_ALIAS,
             node_ip=node_ip,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -167,21 +172,21 @@ async def chat_completions(
             streaming=False,
         )
 
-        REQUEST_COUNT.labels(model=payload.model, status_code="200", streaming="false", username=user.username, node_ip=node_ip).inc()
-        REQUEST_LATENCY_MS.labels(model=payload.model, username=user.username, node_ip=node_ip).observe(latency_ms)
-        PROMPT_TOKENS.labels(model=payload.model, username=user.username).inc(prompt_tokens)
-        COMPLETION_TOKENS.labels(model=payload.model, username=user.username).inc(completion_tokens)
+        REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="false", username=user.username, node_ip=node_ip).inc()
+        REQUEST_LATENCY_MS.labels(model=_MODEL_ALIAS, username=user.username, node_ip=node_ip).observe(latency_ms)
+        PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username).inc(prompt_tokens)
+        COMPLETION_TOKENS.labels(model=_MODEL_ALIAS, username=user.username).inc(completion_tokens)
         return JSONResponse(result)
     except HTTPException:
         raise
     except Exception as exc:
         latency_ms = int((time.perf_counter() - start) * 1000)
-        REQUEST_COUNT.labels(model=payload.model, status_code="500", streaming="false", username=user.username, node_ip="unknown").inc()
+        REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="500", streaming="false", username=user.username, node_ip="unknown").inc()
         await log_request(
             session,
             user=user,
             api_key_prefix=api_key_prefix,
-            model=payload.model,
+            model=_MODEL_ALIAS,
             node_ip=None,
             prompt_tokens=_estimate_prompt_tokens(payload.messages),
             completion_tokens=0,

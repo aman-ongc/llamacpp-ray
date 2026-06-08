@@ -1,47 +1,58 @@
 import os
-import shlex
 import subprocess
 from pathlib import Path
 
 from gateway.config import settings
 
+_MULTIMODAL_NODE_IP = settings.multimodal_node_ip
+
 
 class LlamaServerProcess:
+    """Manages a local llama-server subprocess.
+
+    Selects model/port/flags based on whether this node is the multimodal
+    node (WS-13 / Qwen3-VL) or a text node (WS-11/03/08 / Gemma 4 26B QAT).
+    """
+
     def __init__(self, host: str, port: int | None = None) -> None:
         self.host = host
-        self.port = port or settings.llama_port
+        self._is_multimodal = (host == _MULTIMODAL_NODE_IP)
+        if port is not None:
+            self.port = port
+        else:
+            self.port = settings.multimodal_llama_port if self._is_multimodal else settings.text_llama_port
         self.process: subprocess.Popen[str] | None = None
 
     def command(self) -> list[str]:
         binary = Path("./build/bin/llama-server")
+        if self._is_multimodal:
+            return [
+                str(binary),
+                "-m", settings.multimodal_llama_model_path,
+                "--mmproj", settings.multimodal_llama_mmproj_path,
+                "-ngl", str(settings.llama_ngl),
+                "-c", "32768",
+                "--host", self.host,
+                "--port", str(self.port),
+                "--parallel", str(settings.llama_parallel),
+                "--flash-attn", "auto",
+                "--cache-type-k", "q8_0",
+                "--cache-type-v", "q8_0",
+                "--cont-batching",
+            ]
         return [
             str(binary),
-            "-m",
-            settings.llama_model_path,
-            "--mmproj",
-            settings.llama_mmproj_path,
-            "-ngl",
-            str(settings.llama_ngl),
-            "-c",
-            str(settings.llama_context),
-            "--host",
-            self.host,
-            "--port",
-            str(self.port),
-            "--parallel",
-            str(settings.llama_parallel),
+            "-m", settings.text_llama_model_path,
+            "-ngl", str(settings.llama_ngl),
+            "-c", str(settings.llama_context),
+            "--host", self.host,
+            "--port", str(self.port),
+            "--parallel", str(settings.llama_parallel),
             "--no-context-shift",
-            "--flash-attn",
-            "auto",
-            "--cache-type-k",
-            "q4_0",
-            "--cache-type-v",
-            "q4_0",
+            "--flash-attn", "auto",
+            "--cache-type-k", "q4_0",
+            "--cache-type-v", "q4_0",
             "--cont-batching",
-            "--spec-type",
-            "draft-mtp",
-            "--spec-draft-n-max",
-            "2",
         ]
 
     def start(self) -> None:

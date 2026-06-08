@@ -3,6 +3,12 @@
 # ONGC LLM Inference Platform — Startup Script (Linux / WSL2)
 # Run this directly on the controller node (WS-11) inside a WSL2 Ubuntu shell.
 # Idempotent — safe to run multiple times.
+#
+# Node layout:
+#   WS-11 (10.208.211.62) — Ray head + text worker, Gemma 4 26B QAT, port 8080
+#   WS-03 (10.208.211.54) — text worker, Gemma 4 26B QAT, port 8080
+#   WS-08 (10.208.211.59) — text worker, Gemma 4 26B QAT, port 8080
+#   WS-13 (10.208.211.64) — multimodal worker, Qwen3-VL-8B, port 8080
 # =============================================================================
 set -euo pipefail
 
@@ -17,20 +23,30 @@ die()     { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
 PROJECT_DIR="/home/administrator/projects/llm-inference-service"
 VENV_DIR="/mnt/d/VirtualEnvironments/llm-platform"
 LLAMA_SERVER="/home/administrator/projects/local_llm/llama.cpp/build/bin/llama-server"
-LLAMA_MODEL="/mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf"
-LLAMA_MMPROJ="/mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/mmproj-F16.gguf"
+
+# WS-11 (controller + text worker): Gemma 4 26B QAT, no mmproj
 CONTROLLER_IP="10.208.211.62"
-LLAMA_PORT=8080
+TEXT_LLAMA_PORT=8080
+TEXT_MODEL="/mnt/d/Models/gemma-4-26b-qat/gemma-4-26B_q4_0-it.gguf"
+
+# WS-13 (multimodal worker): Qwen3-VL-8B with mmproj
+MULTIMODAL_NODE_IP="10.208.211.64"
+MULTIMODAL_LLAMA_PORT=8080
+MULTIMODAL_MODEL="/mnt/d/Models/qwen-3-vl/Qwen3VL-8B-Instruct-Q8_0.gguf"
+MULTIMODAL_MMPROJ="/mnt/d/Models/qwen-3-vl/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"
+
 RAY_PORT=6379
 SERVE_PORT=8001
 SUDO_PASS="Ongc@1234"
+
+# When true: WS-11 joins text pool (llama-server started, text_node resource registered).
+# When false (default): WS-11 is head-only — no llama-server, no text requests.
+CONTROLLER_AS_WORKER="${CONTROLLER_AS_WORKER:-false}"
 
 # Proxy bypass — critical for all internal traffic
 export no_proxy="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in"
 export NO_PROXY="$no_proxy"
 export RAY_grpc_enable_http_proxy=0
-# Disable Ray Serve locality routing — without this, the head node HTTP proxy
-# preferentially routes all requests to its collocated replica, starving workers.
 export RAY_SERVE_PROXY_PREFER_LOCAL_NODE_ROUTING=0
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -75,13 +91,12 @@ fi
 
 echo "$SUDO_PASS" | sudo -S docker compose up -d --build 2>&1 | grep -E "Started|Running|Created|Built|healthy|error" || true
 
-# Wait for gateway to be healthy
 info "Waiting for gateway container..."
 wait_for_http "http://${CONTROLLER_IP}:18000/health" "Gateway" 30
 ok "Docker stack ready"
 
 # ── Step 2: Ray head + Serve ──────────────────────────────────────────────────
-info "Step 2/3 — Starting Ray head (WS-11 acts as both controller and inference worker)..."
+info "Step 2/3 — Starting Ray head (WS-11: controller + text inference worker)..."
 if [[ ! -d "$VENV_DIR" ]]; then
     die "Python venv not found at: $VENV_DIR"
 fi
@@ -105,72 +120,90 @@ for port in 8001 "${RAY_PORT}"; do
     fi
 done
 
-# Head node gets 1 GPU + 6 CPUs so Ray Serve schedules a replica here too.
+# Head node: CPU-only Ray orchestrator. GPU owned exclusively by llama-server.
+# Register "text_node" resource only when WS-11 is enabled as a worker.
 if ray status --address "${CONTROLLER_IP}:${RAY_PORT}" > /dev/null 2>&1; then
     ok "Ray head already running"
 else
-    info "Starting Ray head node (1 GPU, 6 CPUs — head + inference worker)..."
+    if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
+        HEAD_RESOURCES='{"text_node": 1}'
+        info "Starting Ray head node (text_node resource enabled — WS-11 is a worker)..."
+    else
+        HEAD_RESOURCES='{}'
+        info "Starting Ray head node (head-only — WS-11 not in text pool)..."
+    fi
     ray start \
         --head \
         --node-ip-address="${CONTROLLER_IP}" \
         --port="${RAY_PORT}" \
         --dashboard-host=0.0.0.0 \
         --dashboard-port=8265 \
-        --num-gpus=1 \
-        --num-cpus=6
+        --num-gpus=0 \
+        --num-cpus=6 \
+        --resources="$HEAD_RESOURCES"
     sleep 4
 fi
 
-# Start llama.cpp on WS-11 AFTER Ray head is up — ensures Ray has settled
-# before llama-server claims VRAM, maximising GPU layer offload count.
-if ! curl --noproxy '*' -sf "http://${CONTROLLER_IP}:${LLAMA_PORT}/health" >/dev/null 2>&1; then
-    info "Starting llama.cpp on WS-11..."
-    nohup "$LLAMA_SERVER" \
-        -m "$LLAMA_MODEL" \
-        --mmproj "$LLAMA_MMPROJ" \
-        -ngl 999 -c 65536 \
-        --host "$CONTROLLER_IP" --port "$LLAMA_PORT" \
-        --parallel 1 --no-context-shift \
-        --flash-attn auto --cache-type-k q4_0 --cache-type-v q4_0 \
-        --cont-batching \
-        --spec-type draft-mtp --spec-draft-n-max 2 \
-        >/tmp/llama-server-ws11.log 2>&1 &
-    ok "llama.cpp launched on WS-11 (log: /tmp/llama-server-ws11.log)"
+# Start Gemma on WS-11 only when CONTROLLER_AS_WORKER=true.
+if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
+    if ! curl --noproxy '*' -sf "http://${CONTROLLER_IP}:${TEXT_LLAMA_PORT}/health" >/dev/null 2>&1; then
+        info "Starting Gemma 4 26B QAT on WS-11 (port ${TEXT_LLAMA_PORT})..."
+        nohup "$LLAMA_SERVER" \
+            -m "$TEXT_MODEL" \
+            -ngl 999 -c 65536 \
+            --host "$CONTROLLER_IP" --port "$TEXT_LLAMA_PORT" \
+            --parallel 1 --no-context-shift \
+            --flash-attn auto --cache-type-k q4_0 --cache-type-v q4_0 \
+            --cont-batching \
+            >/tmp/llama-server-ws11.log 2>&1 &
+        ok "Gemma launched on WS-11 (log: /tmp/llama-server-ws11.log)"
+    else
+        ok "Gemma already running on WS-11"
+    fi
 else
-    ok "llama.cpp already running on WS-11"
+    info "WS-11 controller-as-worker disabled — skipping llama-server on WS-11"
 fi
 
 info "Starting remote worker nodes (WS-03, WS-08, WS-13) in parallel..."
-# 4 nodes total: WS-11 (head+worker) + WS-03 + WS-08 + WS-13
-WORKER_NODES=("10.208.211.54" "10.208.211.59" "10.208.211.64")
-for worker in "${WORKER_NODES[@]}"; do
-    info "  Launching worker ${worker}..."
-    MODEL_PATH="$LLAMA_MODEL" \
-    MMPROJ_PATH="$LLAMA_MMPROJ" \
+# WS-03 and WS-08: text nodes (Gemma, port 8080, text_node resource)
+# WS-13: multimodal node (Qwen3-VL, port 8080, multimodal_node resource)
+TEXT_WORKERS=("10.208.211.54" "10.208.211.59")
+for worker in "${TEXT_WORKERS[@]}"; do
+    info "  Launching text worker ${worker}..."
+    MODEL_PATH="$TEXT_MODEL" \
+    MMPROJ_PATH="" \
     LLAMA_SERVER="$LLAMA_SERVER" \
     RAY_HEAD_IP="$CONTROLLER_IP" \
     bash "$PROJECT_DIR/scripts/start_linux_worker.sh" "$worker" \
         > "/tmp/worker-${worker}.log" 2>&1 &
 done
 
+info "  Launching multimodal worker ${MULTIMODAL_NODE_IP}..."
+MODEL_PATH="$MULTIMODAL_MODEL" \
+MMPROJ_PATH="$MULTIMODAL_MMPROJ" \
+LLAMA_SERVER="$LLAMA_SERVER" \
+RAY_HEAD_IP="$CONTROLLER_IP" \
+bash "$PROJECT_DIR/scripts/start_linux_worker.sh" "$MULTIMODAL_NODE_IP" \
+    > "/tmp/worker-${MULTIMODAL_NODE_IP}.log" 2>&1 &
+
 info "Waiting for all 4 nodes to join cluster (up to 120s)..."
-# head counts as node 1; need head + 3 workers = 4
 for i in {1..24}; do
     node_count=$(ray status --address "${CONTROLLER_IP}:${RAY_PORT}" 2>/dev/null \
         | grep -cE "node_[0-9a-f]+" || true)
     if [[ "$node_count" -ge 4 ]]; then
-        ok "All 4 nodes active: WS-11 (head+worker) + WS-03 + WS-08 + WS-13"
+        ok "All 4 nodes active: WS-11 (head+text) + WS-03 (text) + WS-08 (text) + WS-13 (multimodal)"
         break
     fi
     sleep 5
 done
 ray status --address "${CONTROLLER_IP}:${RAY_PORT}" || true
 
-info "Deploying Ray Serve (LlamaCppWorker)..."
+info "Deploying Ray Serve (TextWorker + MultimodalWorker)..."
 cd "$PROJECT_DIR"
 python scripts/deploy_serve.py
+sleep 10  # allow replicas on remote nodes to fully initialize before health check
 
-wait_for_http "http://${CONTROLLER_IP}:${SERVE_PORT}/health" "Ray Serve" 20
+wait_for_http "http://${CONTROLLER_IP}:${SERVE_PORT}/text/health" "Ray Serve (text)" 60
 
 # ── Step 3: Verify end-to-end ─────────────────────────────────────────────────
 info "Step 3/3 — End-to-end verification..."
@@ -183,10 +216,18 @@ echo -e "${GREEN}  Platform is UP${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "  ${CYAN}API endpoint${NC}    http://${CONTROLLER_IP}:10080/v1/chat/completions"
+echo -e "  ${CYAN}Model name${NC}      ongc-llm  (text → Gemma pool, image → Qwen3-VL)"
 echo -e "  ${CYAN}Grafana${NC}         http://${CONTROLLER_IP}:13000   (admin / ongc1234)"
 echo -e "  ${CYAN}Prometheus${NC}      http://${CONTROLLER_IP}:9090"
 echo -e "  ${CYAN}Ray Dashboard${NC}   http://${CONTROLLER_IP}:8265"
 echo -e "  ${CYAN}Gateway direct${NC}  http://${CONTROLLER_IP}:18000"
+echo ""
+if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
+    echo -e "  ${CYAN}Text nodes${NC}      WS-11/03/08 → Gemma 4 26B QAT (port 8080)"
+else
+    echo -e "  ${CYAN}Text nodes${NC}      WS-03/08 → Gemma 4 26B QAT (port 8080)  [WS-11 head-only]"
+fi
+echo -e "  ${CYAN}Multimodal${NC}      WS-13       → Qwen3-VL-8B     (port 8080)"
 echo ""
 echo -e "  ${YELLOW}Manage users/keys:${NC}"
 echo -e "    curl --noproxy '*' http://${CONTROLLER_IP}:10080/admin/users -H 'X-Admin-Secret: changeme'"

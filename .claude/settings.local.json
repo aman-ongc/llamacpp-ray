@@ -13,7 +13,8 @@
       "Bash(xargs ls:*)",
       "Bash(ray status:*)",
       "Read(///wsl.localhost/Ubuntu-24.04/tmp/**)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(chmod:*)"
     ]
   }
 }
