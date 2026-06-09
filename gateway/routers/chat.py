@@ -18,6 +18,7 @@ from gateway.metrics import (
     PROMPT_TOKENS,
     REQUEST_COUNT,
     REQUEST_LATENCY_MS,
+    TOTAL_TOKENS,
 )
 from gateway.models import User
 from gateway.rate_limiter import check_rate_limit
@@ -138,6 +139,7 @@ async def chat_completions(
                 status_code=200,
                 error_message=None,
                 streaming=True,
+                request_type=request_type,
             )
             node_ip_label = settings.multimodal_node_ip if multimodal else "stream"
             REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="true", username=user.username, node_ip=node_ip_label).inc()
@@ -170,6 +172,7 @@ async def chat_completions(
             status_code=200,
             error_message=None,
             streaming=False,
+            request_type=request_type,
         )
 
         REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="false", username=user.username, node_ip=node_ip).inc()

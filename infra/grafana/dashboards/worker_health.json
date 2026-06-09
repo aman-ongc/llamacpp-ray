@@ -48,7 +48,7 @@
      "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","textMode":"auto"},
      "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"unit":"short",
        "thresholds":{"mode":"absolute","steps":[{"color":"green","value":null}]}}},
-     "targets":[{"refId":"A","expr":"sum(llamacpp_predicted_tokens_per_second)",
+     "targets":[{"refId":"A","expr":"sum(llamacpp:predicted_tokens_seconds)",
        "datasource":{"type":"prometheus","uid":"prometheus"}}]},
 
     {"id":6,"title":"Active Slots (cluster total)","type":"stat","datasource":{"type":"prometheus","uid":"prometheus"},
@@ -56,7 +56,7 @@
      "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","textMode":"auto"},
      "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"min":0,"max":8,
        "thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":6},{"color":"red","value":8}]}}},
-     "targets":[{"refId":"A","expr":"sum(llamacpp_requests_processing)",
+     "targets":[{"refId":"A","expr":"sum(llamacpp:requests_processing)",
        "datasource":{"type":"prometheus","uid":"prometheus"}}]},
 
     {"id":200,"title":"Node Request Performance","type":"row","collapsed":false,
@@ -165,7 +165,7 @@
      "gridPos":{"h":8,"w":12,"x":12,"y":47},
      "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"bottom"}},
      "fieldConfig":{"defaults":{"unit":"percent","min":0,"max":100,"custom":{"lineWidth":2,"fillOpacity":8}}},
-     "targets":[{"refId":"A","expr":"llamacpp_kv_cache_usage_ratio * 100","legendFormat":"{{instance}}",
+     "targets":[{"refId":"A","expr":"llamacpp:kv_cache_usage_ratio * 100","legendFormat":"{{instance}}",
        "datasource":{"type":"prometheus","uid":"prometheus"}}]},
 
     {"id":19,"title":"All Nodes — Generation Tokens/sec","type":"timeseries",
@@ -173,7 +173,7 @@
      "gridPos":{"h":8,"w":12,"x":0,"y":55},
      "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"bottom"}},
      "fieldConfig":{"defaults":{"unit":"short","custom":{"lineWidth":2,"fillOpacity":8}}},
-     "targets":[{"refId":"A","expr":"llamacpp_predicted_tokens_per_second","legendFormat":"{{instance}}",
+     "targets":[{"refId":"A","expr":"llamacpp:predicted_tokens_seconds","legendFormat":"{{instance}}",
        "datasource":{"type":"prometheus","uid":"prometheus"}}]},
 
     {"id":20,"title":"All Nodes — Active Slots","type":"timeseries",
@@ -181,7 +181,7 @@
      "gridPos":{"h":8,"w":12,"x":12,"y":55},
      "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"bottom"}},
      "fieldConfig":{"defaults":{"unit":"short","min":0,"max":2,"custom":{"lineWidth":2,"fillOpacity":8}}},
-     "targets":[{"refId":"A","expr":"llamacpp_requests_processing","legendFormat":"{{instance}}",
+     "targets":[{"refId":"A","expr":"llamacpp:requests_processing","legendFormat":"{{instance}}",
        "datasource":{"type":"prometheus","uid":"prometheus"}}]},
 
     {"id":400,"title":"Per-Node Gauges","type":"row","collapsed":false,

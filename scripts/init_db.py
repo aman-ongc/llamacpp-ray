@@ -22,6 +22,12 @@ def ensure_schema(sync_connection) -> None:
         columns = {column["name"] for column in inspector.get_columns("api_keys")}
         if "metadata" not in columns:
             sync_connection.execute(text("ALTER TABLE api_keys ADD COLUMN metadata TEXT"))
+    if "request_logs" in inspector.get_table_names():
+        columns = {column["name"] for column in inspector.get_columns("request_logs")}
+        if "request_type" not in columns:
+            sync_connection.execute(
+                text("ALTER TABLE request_logs ADD COLUMN request_type VARCHAR(20) NOT NULL DEFAULT 'text'")
+            )
 
 
 async def main() -> None:

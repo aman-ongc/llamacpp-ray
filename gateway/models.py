@@ -64,6 +64,7 @@ class RequestLog(Base):
     status_code: Mapped[int] = mapped_column(Integer, nullable=False)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     streaming: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    request_type: Mapped[str] = mapped_column(String(20), nullable=False, default="text")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
