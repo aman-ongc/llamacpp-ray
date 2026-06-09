@@ -17,6 +17,7 @@ async def log_request(
     status_code: int,
     error_message: str | None,
     streaming: bool,
+    request_type: str = "text",
 ) -> RequestLog:
     entry = RequestLog(
         user_id=user.id if user else None,
@@ -30,6 +31,7 @@ async def log_request(
         status_code=status_code,
         error_message=error_message,
         streaming=streaming,
+        request_type=request_type,
     )
     session.add(entry)
     await session.commit()

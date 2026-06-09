@@ -31,7 +31,32 @@ else
   echo "[controller] Ray head already running."
 fi
 
+<<<<<<< Updated upstream
 # Deploy Serve app.
+=======
+# Start Gemma 4 26B QAT only when CONTROLLER_AS_WORKER=true.
+if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
+  if ! curl --noproxy '*' -sf "http://${RAY_HEAD_IP}:${TEXT_LLAMA_PORT}/health" >/dev/null 2>&1; then
+    echo "[controller] Starting Gemma 4 26B QAT on port ${TEXT_LLAMA_PORT}..."
+    nohup "$LLAMA_SERVER" \
+      -m "$TEXT_MODEL" \
+      -ngl 999 -c 65536 \
+      --host "$RAY_HEAD_IP" --port "$TEXT_LLAMA_PORT" \
+      --parallel 1 --no-context-shift \
+      --flash-attn auto --cache-type-k q4_0 --cache-type-v q4_0 \
+      --cont-batching \
+      --metrics \
+      >/tmp/llama-server-ws11.log 2>&1 &
+    echo "[controller] Gemma launched (log: /tmp/llama-server-ws11.log)"
+  else
+    echo "[controller] Gemma already running on port ${TEXT_LLAMA_PORT}."
+  fi
+else
+  echo "[controller] Controller-as-worker disabled — skipping llama-server on WS-11."
+fi
+
+# Deploy Serve apps.
+>>>>>>> Stashed changes
 echo "[controller] Deploying Ray Serve..."
 cd "${PROJECT}"
 python scripts/deploy_serve.py

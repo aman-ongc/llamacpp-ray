@@ -59,6 +59,11 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: llm-prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NO_PROXY: "localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in"
+      no_proxy: "localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in"
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus

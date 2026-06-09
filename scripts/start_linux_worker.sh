@@ -48,8 +48,12 @@ if ! curl --noproxy '*' -sf "http://$LLAMA_HOST:$LLAMA_PORT/health" >/dev/null 2
       --cache-type-k q4_0 \
       --cache-type-v q4_0 \
       --cont-batching \
+<<<<<<< Updated upstream
       --spec-type draft-mtp \
       --spec-draft-n-max 2 \
+=======
+      --metrics \
+>>>>>>> Stashed changes
       >/tmp/llama-server.log 2>&1 &
   else
     nohup "$LLAMA_SERVER" \
@@ -64,8 +68,12 @@ if ! curl --noproxy '*' -sf "http://$LLAMA_HOST:$LLAMA_PORT/health" >/dev/null 2
       --cache-type-k q4_0 \
       --cache-type-v q4_0 \
       --cont-batching \
+<<<<<<< Updated upstream
       --spec-type draft-mtp \
       --spec-draft-n-max 2 \
+=======
+      --metrics \
+>>>>>>> Stashed changes
       >/tmp/llama-server.log 2>&1 &
   fi
 fi

@@ -16,12 +16,17 @@ REQUEST_LATENCY_MS = Histogram(
 PROMPT_TOKENS = Counter(
     "llm_prompt_tokens_total",
     "Total prompt tokens processed",
-    ["model", "username"],
+    ["model", "username", "request_type"],
 )
 COMPLETION_TOKENS = Counter(
     "llm_completion_tokens_total",
     "Total completion tokens generated",
-    ["model", "username"],
+    ["model", "username", "request_type"],
+)
+TOTAL_TOKENS = Counter(
+    "llm_total_tokens_total",
+    "Total tokens (prompt + completion) processed",
+    ["model", "username", "request_type"],
 )
 ACTIVE_REQUESTS = Gauge(
     "llm_active_requests",

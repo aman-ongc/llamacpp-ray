@@ -11,24 +11,44 @@ scrape_configs:
   - job_name: "node-exporter"
     static_configs:
       - targets:
-          - "10.208.211.62:9100"
+          - "host.docker.internal:9100"
+        labels:
+          instance: "10.208.211.62:9100"
+      - targets:
           - "10.208.211.54:9100"
+      - targets:
           - "10.208.211.59:9100"
+      - targets:
           - "10.208.211.64:9100"
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: "host\\.docker\\.internal:(.*)"
+        target_label: __address__
+        replacement: "host.docker.internal:${1}"
 
   - job_name: "nvidia-gpu-exporter"
     static_configs:
       - targets:
-          - "10.208.211.62:9835"
+          - "host.docker.internal:9835"
+        labels:
+          instance: "10.208.211.62:9835"
+      - targets:
           - "10.208.211.54:9835"
+      - targets:
           - "10.208.211.59:9835"
+      - targets:
           - "10.208.211.64:9835"
 
   - job_name: "llama-cpp"
     static_configs:
       - targets:
-          - "10.208.211.62:8080"
+          - "host.docker.internal:8080"
+        labels:
+          instance: "10.208.211.62:8080"
+      - targets:
           - "10.208.211.54:8080"
+      - targets:
           - "10.208.211.59:8080"
+      - targets:
           - "10.208.211.64:8080"
     metrics_path: /metrics
