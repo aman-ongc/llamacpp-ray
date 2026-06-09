@@ -108,14 +108,7 @@ async def chat_completions(
     except RedisError:
         pass
 
-<<<<<<< Updated upstream
     affinity_key = api_key_prefix if payload.session_affinity else None
-=======
-    multimodal = _is_multimodal_request(payload.messages)
-    request_type = "multimodal" if multimodal else "text"
-    # Affinity only applies to text pool (multimodal pool is a single node).
-    affinity_key = api_key_prefix if (payload.session_affinity and not multimodal) else None
->>>>>>> Stashed changes
 
     start = time.perf_counter()
     ACTIVE_REQUESTS.inc()
@@ -144,18 +137,11 @@ async def chat_completions(
                 streaming=True,
                 request_type=request_type,
             )
-<<<<<<< Updated upstream
             # node_ip is unknown for streaming (SSE proxied before node responds);
             # use "stream" as a sentinel so per-node dashboards stay clean.
             REQUEST_COUNT.labels(model=payload.model, status_code="200", streaming="true", username=user.username, node_ip="stream").inc()
             REQUEST_LATENCY_MS.labels(model=payload.model, username=user.username, node_ip="stream").observe(latency_ms)
             PROMPT_TOKENS.labels(model=payload.model, username=user.username).inc(prompt_tokens)
-=======
-            node_ip_label = settings.multimodal_node_ip if multimodal else "stream"
-            REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="true", username=user.username, node_ip=node_ip_label).inc()
-            REQUEST_LATENCY_MS.labels(model=_MODEL_ALIAS, username=user.username, node_ip=node_ip_label).observe(latency_ms)
-            PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(prompt_tokens)
->>>>>>> Stashed changes
             return response
 
         result = await submit_inference(_payload_for_inference(payload), affinity_key)
@@ -184,18 +170,10 @@ async def chat_completions(
             request_type=request_type,
         )
 
-<<<<<<< Updated upstream
         REQUEST_COUNT.labels(model=payload.model, status_code="200", streaming="false", username=user.username, node_ip=node_ip).inc()
         REQUEST_LATENCY_MS.labels(model=payload.model, username=user.username, node_ip=node_ip).observe(latency_ms)
         PROMPT_TOKENS.labels(model=payload.model, username=user.username).inc(prompt_tokens)
         COMPLETION_TOKENS.labels(model=payload.model, username=user.username).inc(completion_tokens)
-=======
-        REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="false", username=user.username, node_ip=node_ip).inc()
-        REQUEST_LATENCY_MS.labels(model=_MODEL_ALIAS, username=user.username, node_ip=node_ip).observe(latency_ms)
-        PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(prompt_tokens)
-        COMPLETION_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(completion_tokens)
-        TOTAL_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(prompt_tokens + completion_tokens)
->>>>>>> Stashed changes
         return JSONResponse(result)
     except HTTPException:
         raise
