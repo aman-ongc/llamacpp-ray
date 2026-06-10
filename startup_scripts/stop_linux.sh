@@ -25,31 +25,21 @@ free_ports_local() {
 _ssh() {
   local host="$1"; shift
   if command -v sshpass >/dev/null 2>&1; then
-    sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 "administrator@$host" "$@"
+    sshpass -p "$SSH_PASS" ssh -n -o StrictHostKeyChecking=no -o ConnectTimeout=5 "administrator@$host" "$@"
   else
-    ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes "administrator@$host" "$@"
+    ssh -n -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes "administrator@$host" "$@"
   fi
 }
 
 kill_llama_remote() {
   local host="$1"
   echo "[stop] Killing llama-server on $host..."
-  _ssh "$host" "
-    pkill -f llama-server 2>/dev/null || true
-    sleep 1
-    pkill -9 -f llama-server 2>/dev/null || true
-  " 2>&1 || echo "[warn] Could not reach $host — llama-server may still hold GPU"
+  _ssh "$host" "pkill llama-server || true; sleep 1; pkill -9 llama-server || true; echo killed" 2>&1 || echo "[warn] Could not reach $host — llama-server may still hold GPU"
 }
 
 stop_ray_remote() {
   local host="$1"
-  _ssh "$host" "
-    pkill -f raylet 2>/dev/null || true
-    pkill -f gcs_server 2>/dev/null || true
-    pkill -f plasma_store 2>/dev/null || true
-    if [ -x '${VENV_DIR}/bin/ray' ]; then '${VENV_DIR}/bin/ray' stop --force 2>/dev/null || true; fi
-    for port in 8001 8080 6379; do fuser -k \${port}/tcp 2>/dev/null || true; done
-  " >/dev/null 2>&1 || true
+  _ssh "$host" "pkill raylet || true; pkill gcs_server || true; pkill plasma_store || true; for port in 8001 8080 6379; do fuser -k \${port}/tcp 2>/dev/null || true; done" >/dev/null 2>&1 || true
 }
 
 echo "[stop] Killing llama-server on ALL nodes (parallel)..."

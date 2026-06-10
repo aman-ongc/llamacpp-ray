@@ -109,6 +109,7 @@ async def chat_completions(
         pass
 
     multimodal = _is_multimodal_request(payload.messages)
+    request_type = "multimodal" if multimodal else "text"
     # Affinity only applies to text pool (multimodal pool is a single node).
     affinity_key = api_key_prefix if (payload.session_affinity and not multimodal) else None
 
@@ -144,7 +145,7 @@ async def chat_completions(
             node_ip_label = settings.multimodal_node_ip if multimodal else "stream"
             REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="true", username=user.username, node_ip=node_ip_label).inc()
             REQUEST_LATENCY_MS.labels(model=_MODEL_ALIAS, username=user.username, node_ip=node_ip_label).observe(latency_ms)
-            PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username).inc(prompt_tokens)
+            PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(prompt_tokens)
             return response
 
         result = await submit_inference(
@@ -177,8 +178,8 @@ async def chat_completions(
 
         REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="false", username=user.username, node_ip=node_ip).inc()
         REQUEST_LATENCY_MS.labels(model=_MODEL_ALIAS, username=user.username, node_ip=node_ip).observe(latency_ms)
-        PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username).inc(prompt_tokens)
-        COMPLETION_TOKENS.labels(model=_MODEL_ALIAS, username=user.username).inc(completion_tokens)
+        PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(prompt_tokens)
+        COMPLETION_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(completion_tokens)
         return JSONResponse(result)
     except HTTPException:
         raise

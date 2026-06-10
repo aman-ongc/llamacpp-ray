@@ -13,17 +13,9 @@
       "Bash(xargs ls:*)",
       "Bash(ray status:*)",
       "Read(///wsl.localhost/Ubuntu-24.04/tmp/**)",
-<<<<<<< Updated upstream
-      "Bash(docker compose:*)"
-=======
       "Bash(docker compose:*)",
-      "Bash(chmod:*)",
-      "Bash(MSYS_NO_PATHCONV=1 wsl -d Ubuntu-24.04 -- bash /home/administrator/restart_llama.sh 2>&1)",
-      "Bash(MSYS_NO_PATHCONV=1 wsl -d Ubuntu-24.04 -- bash -c \"curl --noproxy '*' --max-time 5 http://10.208.211.54:8080/metrics 2>/dev/null | grep -E 'llamacpp_predicted|llamacpp_prompt' | head -5\")",
-      "Bash(MSYS_NO_PATHCONV=1 wsl -d Ubuntu-24.04 -- bash -c \"curl --noproxy '*' --max-time 5 http://10.208.211.54:8080/metrics 2>/dev/null | head -20\")",
-      "Bash(MSYS_NO_PATHCONV=1 wsl -d Ubuntu-24.04 -- bash -c \"curl --noproxy '*' --max-time 5 http://10.208.211.54:8080/metrics 2>/dev/null | grep -E 'gauge|GAUGE|seconds gauge|per_second'\")",
-      "Bash(MSYS_NO_PATHCONV=1 wsl -d Ubuntu-24.04 -- bash -c \"pgrep -a llama-server 2>/dev/null || echo 'not running'\")"
->>>>>>> Stashed changes
+      "Bash(sshpass -V)",
+      "Bash(sudo docker:*)"
     ]
   }
 }
