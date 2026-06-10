@@ -25,12 +25,12 @@ async def test_request_log_written_after_chat(client, session):
     response = await client.post(
         "/v1/chat/completions",
         headers={"Authorization": raw_key},
-        json={"model": "qwen", "messages": [{"role": "user", "content": "log this"}]},
+        json={"model": "ongc-llm", "messages": [{"role": "user", "content": "log this"}]},
     )
     assert response.status_code == 200
 
     result = await session.execute(select(RequestLog))
     logs = result.scalars().all()
     assert logs
-    assert logs[-1].model == "qwen"
+    assert logs[-1].model == "ongc-llm"
     assert logs[-1].api_key_prefix == raw_key[:12]

@@ -1,7 +1,7 @@
 # ONGC LLM Inference Platform — Operations Guide
 
 > Audience: platform administrators and operators.
-> Platform: distributed self-hosted Qwen 35B inference on ONGC intranet.
+> Platform: distributed self-hosted Gemma 4 26B inference on ONGC intranet.
 
 ---
 

@@ -85,7 +85,7 @@ SELECT
         WHEN 9  THEN 'sk-ongc-ani8'
         ELSE         'sk-ongc-roh9'
     END,
-    'qwen',
+    'ongc-llm',
     node_ip,
     (random() * 430 + 20)::int,
     (random() * 560 + 40)::int,

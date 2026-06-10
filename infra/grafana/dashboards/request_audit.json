@@ -1,0 +1,103 @@
+{
+  "title": "Request Audit Log",
+  "uid": "request-audit",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "graphTooltip": 1,
+  "panels": [
+
+    {"id":100,"title":"Summary","type":"row","collapsed":false,
+     "gridPos":{"h":1,"w":24,"x":0,"y":0},"panels":[]},
+
+    {"id":1,"title":"Total Requests","type":"stat",
+     "datasource":{"type":"postgres","uid":"llm-postgres"},
+     "gridPos":{"h":4,"w":6,"x":0,"y":1},
+     "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","textMode":"auto","orientation":"auto"},
+     "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},
+       "thresholds":{"mode":"absolute","steps":[{"color":"blue","value":null}]}}},
+     "targets":[{"refId":"A","format":"table","rawQuery":true,
+       "rawSql":"SELECT COUNT(*) AS \"value\" FROM request_logs WHERE $__timeFilter(created_at)",
+       "datasource":{"type":"postgres","uid":"llm-postgres"}}]},
+
+    {"id":2,"title":"Successful Requests","type":"stat",
+     "datasource":{"type":"postgres","uid":"llm-postgres"},
+     "gridPos":{"h":4,"w":6,"x":6,"y":1},
+     "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","textMode":"auto","orientation":"auto"},
+     "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},
+       "thresholds":{"mode":"absolute","steps":[{"color":"green","value":null}]}}},
+     "targets":[{"refId":"A","format":"table","rawQuery":true,
+       "rawSql":"SELECT COUNT(*) AS \"value\" FROM request_logs WHERE $__timeFilter(created_at) AND status_code = 200",
+       "datasource":{"type":"postgres","uid":"llm-postgres"}}]},
+
+    {"id":3,"title":"Failed Requests","type":"stat",
+     "datasource":{"type":"postgres","uid":"llm-postgres"},
+     "gridPos":{"h":4,"w":6,"x":12,"y":1},
+     "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","textMode":"auto","orientation":"auto"},
+     "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},
+       "thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"red","value":1}]}}},
+     "targets":[{"refId":"A","format":"table","rawQuery":true,
+       "rawSql":"SELECT COUNT(*) AS \"value\" FROM request_logs WHERE $__timeFilter(created_at) AND status_code != 200",
+       "datasource":{"type":"postgres","uid":"llm-postgres"}}]},
+
+    {"id":4,"title":"Error Rate %","type":"stat",
+     "datasource":{"type":"postgres","uid":"llm-postgres"},
+     "gridPos":{"h":4,"w":6,"x":18,"y":1},
+     "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","textMode":"auto","orientation":"auto"},
+     "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"unit":"percent",
+       "thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":5},{"color":"red","value":20}]}}},
+     "targets":[{"refId":"A","format":"table","rawQuery":true,
+       "rawSql":"SELECT ROUND(100.0 * SUM(CASE WHEN status_code != 200 THEN 1 ELSE 0 END) / NULLIF(COUNT(*),0), 1) AS \"value\" FROM request_logs WHERE $__timeFilter(created_at)",
+       "datasource":{"type":"postgres","uid":"llm-postgres"}}]},
+
+    {"id":200,"title":"All Requests","type":"row","collapsed":false,
+     "gridPos":{"h":1,"w":24,"x":0,"y":5},"panels":[]},
+
+    {"id":5,"title":"All Requests","type":"table",
+     "datasource":{"type":"postgres","uid":"llm-postgres"},
+     "gridPos":{"h":12,"w":24,"x":0,"y":6},
+     "options":{"sortBy":[{"displayName":"Time","desc":true}],"footer":{"show":false}},
+     "fieldConfig":{
+       "defaults":{"custom":{"align":"left","displayMode":"auto","inspect":false}},
+       "overrides":[
+         {"matcher":{"id":"byName","options":"Status Code"},
+          "properties":[{"id":"custom.displayMode","value":"color-background"},
+            {"id":"thresholds","value":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"red","value":201}]}},
+            {"id":"color","value":{"mode":"thresholds"}}]},
+         {"matcher":{"id":"byName","options":"Latency (ms)"},
+          "properties":[{"id":"unit","value":"ms"}]},
+         {"matcher":{"id":"byName","options":"Request Preview"},
+          "properties":[{"id":"custom.width","value":300},{"id":"custom.inspect","value":true}]},
+         {"matcher":{"id":"byName","options":"Response Preview"},
+          "properties":[{"id":"custom.width","value":300},{"id":"custom.inspect","value":true}]}
+       ]
+     },
+     "targets":[{"refId":"A","format":"table","rawQuery":true,
+       "rawSql":"SELECT rl.created_at AS \"Time\", COALESCE(NULLIF(ak.label, 'default'), u.username, 'unknown') AS \"User\", rl.status_code AS \"Status Code\", rl.prompt_tokens AS \"Prompt Tokens\", rl.completion_tokens AS \"Completion Tokens\", rl.latency_ms AS \"Latency (ms)\", rl.node_ip AS \"Node\", rl.request_type AS \"Type\", rl.streaming AS \"Stream\", rl.request_preview AS \"Request Preview\", rl.response_preview AS \"Response Preview\", rl.error_message AS \"Error\" FROM request_logs rl LEFT JOIN users u ON u.id = rl.user_id LEFT JOIN api_keys ak ON ak.key_prefix = rl.api_key_prefix WHERE $__timeFilter(rl.created_at) ORDER BY rl.created_at DESC LIMIT 500",
+       "datasource":{"type":"postgres","uid":"llm-postgres"}}]},
+
+    {"id":300,"title":"Failed Requests (Full Detail)","type":"row","collapsed":false,
+     "gridPos":{"h":1,"w":24,"x":0,"y":18},"panels":[]},
+
+    {"id":6,"title":"Failed Requests — Full Detail","type":"table",
+     "datasource":{"type":"postgres","uid":"llm-postgres"},
+     "gridPos":{"h":12,"w":24,"x":0,"y":19},
+     "options":{"sortBy":[{"displayName":"Time","desc":true}],"footer":{"show":false}},
+     "fieldConfig":{
+       "defaults":{"custom":{"align":"left","displayMode":"auto","inspect":false}},
+       "overrides":[
+         {"matcher":{"id":"byName","options":"Latency (ms)"},
+          "properties":[{"id":"unit","value":"ms"}]},
+         {"matcher":{"id":"byName","options":"Full Request"},
+          "properties":[{"id":"custom.width","value":400},{"id":"custom.inspect","value":true}]},
+         {"matcher":{"id":"byName","options":"Error Detail"},
+          "properties":[{"id":"custom.width","value":400},{"id":"custom.inspect","value":true}]}
+       ]
+     },
+     "targets":[{"refId":"A","format":"table","rawQuery":true,
+       "rawSql":"SELECT rl.created_at AS \"Time\", COALESCE(NULLIF(ak.label, 'default'), u.username, 'unknown') AS \"User\", rl.status_code AS \"Status Code\", rl.prompt_tokens AS \"Prompt Tokens\", rl.latency_ms AS \"Latency (ms)\", rl.node_ip AS \"Node\", rl.request_type AS \"Type\", rl.request_preview AS \"Full Request\", rl.response_preview AS \"Error Detail\", rl.error_message AS \"Error Message\" FROM request_logs rl LEFT JOIN users u ON u.id = rl.user_id LEFT JOIN api_keys ak ON ak.key_prefix = rl.api_key_prefix WHERE $__timeFilter(rl.created_at) AND rl.status_code != 200 ORDER BY rl.created_at DESC LIMIT 200",
+       "datasource":{"type":"postgres","uid":"llm-postgres"}}]}
+
+  ]
+}

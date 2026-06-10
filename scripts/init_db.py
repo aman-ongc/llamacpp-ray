@@ -28,6 +28,10 @@ def ensure_schema(sync_connection) -> None:
             sync_connection.execute(
                 text("ALTER TABLE request_logs ADD COLUMN request_type VARCHAR(20) NOT NULL DEFAULT 'text'")
             )
+        if "request_preview" not in columns:
+            sync_connection.execute(text("ALTER TABLE request_logs ADD COLUMN request_preview TEXT"))
+        if "response_preview" not in columns:
+            sync_connection.execute(text("ALTER TABLE request_logs ADD COLUMN response_preview TEXT"))
 
 
 async def main() -> None:

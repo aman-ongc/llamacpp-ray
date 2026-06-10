@@ -6,7 +6,7 @@ This document explains what every component in this codebase does, why it exists
 
 ## What This System Does
 
-This is a **distributed LLM inference platform** built for ONGC's internal intranet. It takes inference requests from internal users, routes them across multiple GPU workstations, runs the Qwen 3.6 35B model on each, and returns responses through a single unified API — all without relying on any cloud or external services.
+This is a **distributed LLM inference platform** built for ONGC's internal intranet. It takes inference requests from internal users, routes them across multiple GPU workstations, runs the Gemma 4 26B model on each, and returns responses through a single unified API — all without relying on any cloud or external services.
 
 The four physical nodes are:
 
@@ -36,7 +36,7 @@ LlamaCppWorker replicas (one per GPU node, managed by Ray)
       |
 llama-server processes (one per node, port 8080)   ← actual model inference
       |
-Qwen3.6-35B GGUF model on GPU
+Gemma 4 26B GGUF model on GPU
 ```
 
 Supporting services running in Docker on WS-11:
@@ -82,7 +82,7 @@ Single `Settings` class (using `pydantic-settings`) that reads all configuration
 - **Ray Serve URL** — where to send inference requests (`http://10.208.211.62:8001`)
 - **Controller/worker IPs** — used by `ray_client.py` to build the round-robin list
 - **llama-server parameters** — model path, port, context size, parallelism, GPU layers
-- **`enable_thinking`** — Qwen3.6 has a "thinking mode" (chain-of-thought reasoning); this flag is off by default and can be toggled globally or per-request
+- **`enable_thinking`** — Gemma 4 26B has a "thinking mode" (chain-of-thought reasoning); this flag is off by default and can be toggled globally or per-request
 - **`no_proxy`** — critical for intranet environments; ensures internal traffic bypasses the corporate HTTP proxy at `10.205.122.201:8080`
 
 A single `settings` singleton is imported everywhere. Never instantiate `Settings` again.
@@ -173,7 +173,7 @@ Three liveness/readiness probes. Return static JSON. Used by Docker healthchecks
 
 ### `routers/models_router.py` — `GET /v1/models`
 
-Returns the list of available models in OpenAI format. Currently returns a single model (`qwen`) from settings. No auth required — matches OpenAI's behavior where model listing is public.
+Returns the list of available models in OpenAI format. Currently returns a single model (`ongc-llm`) from settings. No auth required — matches OpenAI's behavior where model listing is public.
 
 ### `routers/metrics_router.py` — `GET /metrics`
 
@@ -194,7 +194,7 @@ The main inference endpoint. Request body fields:
 | `max_tokens` | int | 256 | Max completion length |
 | `temperature` | float | 0.7 | Sampling temperature |
 | `stream` | bool | False | Enable SSE streaming |
-| `enable_thinking` | bool\|None | None | Per-request Qwen3.6 thinking mode override |
+| `enable_thinking` | bool\|None | None | Per-request thinking mode override |
 | `session_affinity` | bool | **True** | Route to same worker per API key for KV cache reuse |
 
 `enable_thinking` and `session_affinity` are gateway-only fields (marked `exclude=True`) — they are stripped before the payload is forwarded to Ray Serve.
@@ -208,7 +208,7 @@ The request flow:
 5. **Inference dispatch:**
    - If `stream=True`: calls `stream_inference(payload, affinity_key)` and returns a `StreamingResponse` (SSE). On failure, falls back to a synthetic SSE stream.
    - If `stream=False`: calls `submit_inference(payload, affinity_key)`. On failure, returns `_fallback_response()`.
-6. **Response normalization** — `_normalize_completion_response()` handles Qwen3.6's thinking mode: if `content` is empty but `reasoning_content` is present, promotes reasoning to content and removes the internal field.
+6. **Response normalization** — `_normalize_completion_response()` handles thinking mode: if `content` is empty but `reasoning_content` is present, promotes reasoning to content and removes the internal field.
 7. **Logging** — writes a `RequestLog` row with all metrics.
 8. **Prometheus** — increments counters and records latency.
 9. **`ACTIVE_REQUESTS` gauge** — incremented at start, decremented in `finally` to always track in-flight requests correctly.
@@ -497,7 +497,7 @@ The ONGC intranet routes HTTP traffic through a corporate proxy (`10.205.122.201
 The primary workload is multi-turn chat conversations. Keeping a user's requests on the same GPU node lets llama.cpp reuse its KV cache for the conversation prefix, reducing time-to-first-token significantly on follow-up messages. Admins or batch-processing clients can set `session_affinity: false` when they want even load distribution (e.g., large independent requests from the same key where cache reuse is unlikely).
 
 **Why is `enable_thinking` a per-request field excluded from the forwarded payload?**
-Qwen3.6 35B supports chain-of-thought reasoning via a special chat template parameter. The flag must be injected into `chat_template_kwargs` rather than sent as a top-level OpenAI field. The gateway strips the custom field from the Pydantic model before forwarding (using `exclude=True` + `model_dump(exclude={...})`) and injects it in the correct location, so clients using standard OpenAI SDKs can opt in via a non-standard extension field without breaking compatibility.
+Gemma 4 26B supports chain-of-thought reasoning via a special chat template parameter. The flag must be injected into `chat_template_kwargs` rather than sent as a top-level OpenAI field. The gateway strips the custom field from the Pydantic model before forwarding (using `exclude=True` + `model_dump(exclude={...})`) and injects it in the correct location, so clients using standard OpenAI SDKs can opt in via a non-standard extension field without breaking compatibility.
 
 ---
 
@@ -547,7 +547,7 @@ Key variables consumed by the gateway (from `config.py`):
 | `CONTROLLER_NODE_IP` | `10.208.211.62` | WS-11 IP |
 | `WORKER_NODE_IPS` | `10.208.211.54,10.208.211.59,10.208.211.64` | Comma-separated worker IPs |
 | `SERVE_REPLICAS` | `4` | Number of Ray Serve replicas |
-| `ENABLE_THINKING` | `false` | Global Qwen3.6 thinking mode toggle |
+| `ENABLE_THINKING` | `false` | Global thinking mode toggle |
 | `NO_PROXY` | `localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in` | Proxy bypass list |
 | `LLAMA_MODEL_PATH` | `/mnt/d/Models/...` | Path to GGUF model file |
 | `REQUEST_TIMEOUT_SECONDS` | `300.0` | Max time to wait for inference |

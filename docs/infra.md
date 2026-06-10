@@ -69,7 +69,7 @@ Identical venvs on all 4 nodes. Synced from WS-11 via cron (`administrator`, eve
 
 ## Working Command
 
-./build/bin/llama-server   -m /mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf   --mmproj /mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/mmproj-F16.gguf   -ngl 999   -c 65536   --host 10.208.211.62   --port 8080   --parallel 2   --no-context-shift   --flash-attn  on --cache-type-k q8_0   --cache-type-v q8_0   --cont-batching   --spec-type draft-mtp   --spec-draft-n-max 4
+./build/bin/llama-server   -m /mnt/d/Models/gemma-4-26b-qat/gemma-4-26B_q4_0-it.gguf   -ngl 999   -c 65536   --host 10.208.211.62   --port 8080   --parallel 2   --no-context-shift   --flash-attn on   --cache-type-k q8_0   --cache-type-v q8_0   --cont-batching
 ---
 
 ## SSH Access

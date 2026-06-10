@@ -84,7 +84,7 @@ def main() -> int:
             "POST",
             f"{base_url}/v1/chat/completions",
             payload={
-                "model": "qwen",
+                "model": "ongc-llm",
                 "messages": [{"role": "user", "content": "Say hello in one sentence."}],
                 "max_tokens": 32,
                 "stream": False,

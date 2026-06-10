@@ -27,7 +27,7 @@ async def seed_user(session):
 async def test_chat_requires_auth(client):
     response = await client.post(
         "/v1/chat/completions",
-        json={"model": "qwen", "messages": [{"role": "user", "content": "hello"}]},
+        json={"model": "ongc-llm", "messages": [{"role": "user", "content": "hello"}]},
     )
     assert response.status_code == 401
 
@@ -38,7 +38,7 @@ async def test_chat_completion_success(client, session):
     response = await client.post(
         "/v1/chat/completions",
         headers={"Authorization": raw_key},
-        json={"model": "qwen", "messages": [{"role": "user", "content": "hello"}]},
+        json={"model": "ongc-llm", "messages": [{"role": "user", "content": "hello"}]},
     )
     assert response.status_code == 200
     body = response.json()
@@ -53,7 +53,7 @@ async def test_chat_completion_stream_success(client, session):
         "/v1/chat/completions",
         headers={"Authorization": raw_key},
         json={
-            "model": "qwen",
+            "model": "ongc-llm",
             "stream": True,
             "messages": [{"role": "user", "content": "stream hello"}],
         },

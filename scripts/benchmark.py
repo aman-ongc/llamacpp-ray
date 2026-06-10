@@ -55,7 +55,7 @@ except ImportError:
 
 GATEWAY_URL = "http://10.208.211.62:18000"
 RAY_SERVE_URL = "http://10.208.211.62:8001"
-MODEL = "qwen"
+MODEL = "ongc-llm"
 NOPROXY = {"http://": None, "https://": None}
 
 # ---------------------------------------------------------------------------

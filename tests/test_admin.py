@@ -56,7 +56,7 @@ async def test_admin_user_usage(client, session):
     session.add(APIKey(user_id=user.id, key_hash=hash_api_key(raw_key),
                        key_prefix=raw_key[:12], label="test", is_active=True))
     session.add(RequestLog(user_id=user.id, api_key_prefix=raw_key[:12],
-                           model="qwen", node_ip="10.208.211.62",
+                           model="ongc-llm", node_ip="10.208.211.62",
                            prompt_tokens=100, completion_tokens=200,
                            latency_ms=3000, queue_ms=50, status_code=200, streaming=False))
     await session.commit()

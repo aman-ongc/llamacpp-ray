@@ -2,7 +2,7 @@
 
 ## ONGC Intranet AI Infrastructure
 
-### Qwen 3.6 35B A3B + llama.cpp + Ray/Kubernetes + FastAPI
+### Gemma 4 26B A4 + llama.cpp + Ray/Kubernetes + FastAPI
 
 ---
 
@@ -50,14 +50,14 @@ This project forms the foundation for:
 
 One workstation already runs:
 
-* Qwen 3.6 35B A3B GGUF
+* Gemma 4 26B A4 GGUF (Q4_0 QAT)
 * llama.cpp
 * Hybrid GPU + CPU inference
 
 Current inference launch example:
 
 ```bash
-./build/bin/llama-server   -m /mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf   --mmproj /mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/mmproj-F16.gguf   -ngl 999   -c 65536   --host 10.208.211.62   --port 8080   --parallel 2   --no-context-shift   --flash-attn  on --cache-type-k q8_0   --cache-type-v q8_0   --cont-batching   --spec-type draft-mtp   --spec-draft-n-max 4
+./build/bin/llama-server   -m /mnt/d/Models/gemma-4-26b-qat/gemma-4-26B_q4_0-it.gguf   -ngl 999   -c 65536   --host 10.208.211.62   --port 8080   --parallel 2   --no-context-shift   --flash-attn on   --cache-type-k q8_0   --cache-type-v q8_0   --cont-batching
 ```
 
 The next phase involves:
@@ -229,7 +229,7 @@ Every major layer should remain independently replaceable.
  GPU Workstation-1   GPU Workstation-2        GPU Workstation-3
  Ray Worker          Ray Worker               Ray Worker
  llama.cpp           llama.cpp                llama.cpp
- Qwen 35B            Qwen 35B                 Qwen 35B
+ Gemma 26B           Gemma 26B                Gemma 26B
 ```
 
 ---

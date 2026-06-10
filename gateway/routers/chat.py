@@ -81,6 +81,32 @@ def _rewrite_sse_model(line: str) -> str:
         return line
 
 
+def _build_request_preview(messages: list[ChatMessage], full: bool = False) -> str:
+    parts = []
+    for msg in messages:
+        if isinstance(msg.content, str):
+            parts.append(f"[{msg.role}]: {msg.content}")
+        else:
+            texts = [p.get("text", "") for p in msg.content if isinstance(p, dict) and p.get("type") == "text"]
+            parts.append(f"[{msg.role}]: {''.join(texts)}")
+    combined = "\n".join(parts)
+    return combined if full else combined[:500]
+
+
+def _build_success_response_preview(result: dict) -> str:
+    preview = {k: v for k, v in result.items() if k != "choices"}
+    choices_preview = []
+    for choice in result.get("choices", []):
+        cp = {k: v for k, v in choice.items() if k != "message"}
+        message = choice.get("message", {})
+        content = message.get("content") or ""
+        cp["message"] = {k: v for k, v in message.items() if k != "content"}
+        cp["message"]["content_preview"] = content[:500]
+        choices_preview.append(cp)
+    preview["choices"] = choices_preview
+    return json.dumps(preview)
+
+
 def _estimate_prompt_tokens(messages: list[ChatMessage]) -> int:
     total = 0
     for message in messages:
@@ -141,6 +167,8 @@ async def chat_completions(
                 error_message=None,
                 streaming=True,
                 request_type=request_type,
+                request_preview=_build_request_preview(payload.messages),
+                response_preview="[streaming]",
             )
             node_ip_label = settings.multimodal_node_ip if multimodal else "stream"
             REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="true", username=user.username, node_ip=node_ip_label).inc()
@@ -174,6 +202,8 @@ async def chat_completions(
             error_message=None,
             streaming=False,
             request_type=request_type,
+            request_preview=_build_request_preview(payload.messages),
+            response_preview=_build_success_response_preview(result),
         )
 
         REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="false", username=user.username, node_ip=node_ip).inc()
@@ -199,6 +229,8 @@ async def chat_completions(
             status_code=500,
             error_message=str(exc),
             streaming=payload.stream,
+            request_preview=_build_request_preview(payload.messages, full=True),
+            response_preview=str(exc),
         )
         raise HTTPException(status_code=500, detail="Inference request failed") from exc
     finally:

@@ -15,7 +15,9 @@
       "Read(///wsl.localhost/Ubuntu-24.04/tmp/**)",
       "Bash(docker compose:*)",
       "Bash(sshpass -V)",
-      "Bash(sudo docker:*)"
+      "Bash(sudo docker:*)",
+      "Bash(cat startup_scripts/* scripts/*)",
+      "Bash(ssh:*)"
     ]
   }
 }
