@@ -155,7 +155,8 @@ if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
             --parallel 1 --no-context-shift \
             --flash-attn auto --cache-type-k q4_0 --cache-type-v q4_0 \
             --cont-batching \
-            >/tmp/llama-server-ws11.log 2>&1 &
+            --metrics \
+            >/tmp/llama-server-ws11.log 2>&1 </dev/null &
         ok "Gemma launched on WS-11 (log: /tmp/llama-server-ws11.log)"
     else
         ok "Gemma already running on WS-11"

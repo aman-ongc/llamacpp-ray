@@ -39,7 +39,7 @@ fi
 
 nohup "$INSTALL_DIR/${BINARY_NAME}" \
   --web.listen-address=":${PORT}" \
-  >/tmp/nvidia_gpu_exporter.log 2>&1 &
+  >/tmp/nvidia_gpu_exporter.log 2>&1 </dev/null &
 
 for _ in {1..20}; do
   if curl --noproxy '*' -sf "http://127.0.0.1:${PORT}/metrics" >/dev/null 2>&1; then

@@ -30,7 +30,7 @@ fi
 nohup "$INSTALL_DIR/node_exporter-${VERSION}.linux-amd64/node_exporter" \
   --web.listen-address=":${PORT}" \
   --collector.filesystem.mount-points-exclude='^/(dev|proc|run|run/user.*|sys|var/lib/docker/.+|var/lib/containers/storage/.+)($|/)' \
-  >/tmp/node_exporter.log 2>&1 &
+  >/tmp/node_exporter.log 2>&1 </dev/null &
 
 for _ in {1..20}; do
   if curl --noproxy '*' -sf "http://127.0.0.1:${PORT}/metrics" >/dev/null 2>&1; then

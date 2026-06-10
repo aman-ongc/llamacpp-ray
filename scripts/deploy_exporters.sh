@@ -14,6 +14,10 @@ remote() {
   sshpass -p "$SSH_PASS" ssh \
     -o StrictHostKeyChecking=no \
     -o ConnectTimeout=10 \
+    -o ServerAliveInterval=10 \
+    -o ServerAliveCountMax=3 \
+    -o BatchMode=no \
+    -n \
     "administrator@${host}" "$@"
 }
 
@@ -21,6 +25,9 @@ push_scripts() {
   local host="$1"
   sshpass -p "$SSH_PASS" scp \
     -o StrictHostKeyChecking=no \
+    -o ConnectTimeout=10 \
+    -o ServerAliveInterval=10 \
+    -o ServerAliveCountMax=3 \
     "${SCRIPT_DIR}/start_node_exporter.sh" \
     "${SCRIPT_DIR}/start_gpu_exporter.sh" \
     "${SCRIPT_DIR}/install_exporters_cron.sh" \

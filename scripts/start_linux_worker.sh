@@ -89,7 +89,8 @@ if ! curl --noproxy '*' -sf "http://$LLAMA_HOST:$LLAMA_PORT/health" >/dev/null 2
       --cache-type-k q8_0 \
       --cache-type-v q8_0 \
       --cont-batching \
-      >/tmp/llama-server.log 2>&1 &
+      --metrics \
+      >/tmp/llama-server.log 2>&1 </dev/null &
   else
     nohup "$LLAMA_SERVER" \
       -m "$MODEL_PATH" \
@@ -103,7 +104,8 @@ if ! curl --noproxy '*' -sf "http://$LLAMA_HOST:$LLAMA_PORT/health" >/dev/null 2
       --cache-type-k q4_0 \
       --cache-type-v q4_0 \
       --cont-batching \
-      >/tmp/llama-server.log 2>&1 &
+      --metrics \
+      >/tmp/llama-server.log 2>&1 </dev/null &
   fi
 fi
 REMOTE
