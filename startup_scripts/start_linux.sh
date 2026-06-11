@@ -150,9 +150,9 @@ if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
         info "Starting Gemma 4 26B QAT on WS-11 (port ${TEXT_LLAMA_PORT})..."
         nohup "$LLAMA_SERVER" \
             -m "$TEXT_MODEL" \
-            -ngl 999 -c 65536 \
+            -ngl 999 -c 131072 \
             --host "$CONTROLLER_IP" --port "$TEXT_LLAMA_PORT" \
-            --parallel 1 --no-context-shift \
+            --parallel 1 \
             --flash-attn auto --cache-type-k q4_0 --cache-type-v q4_0 \
             --cont-batching \
             --metrics \
@@ -210,6 +210,18 @@ wait_for_http "http://${CONTROLLER_IP}:${SERVE_PORT}/text/health" "Ray Serve (te
 info "Step 3/3 — End-to-end verification..."
 wait_for_http "http://${CONTROLLER_IP}:10080/health" "NGINX → Gateway" 15
 
+# ── Watchdog ──────────────────────────────────────────────────────────────────
+info "Starting llama-server watchdog..."
+pkill -f llama_watchdog.sh 2>/dev/null || true
+sleep 1
+CONTROLLER_AS_WORKER="$CONTROLLER_AS_WORKER" \
+LLAMA_SERVER="$LLAMA_SERVER" \
+SSH_PASS="$SUDO_PASS" \
+nohup bash "$PROJECT_DIR/scripts/llama_watchdog.sh" \
+    >> /tmp/llama-watchdog.log 2>&1 &
+echo $! > /tmp/llama-watchdog.pid
+ok "Watchdog PID $(cat /tmp/llama-watchdog.pid) — log: /tmp/llama-watchdog.log"
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
@@ -222,6 +234,7 @@ echo -e "  ${CYAN}Grafana${NC}         http://${CONTROLLER_IP}:13000   (admin / 
 echo -e "  ${CYAN}Prometheus${NC}      http://${CONTROLLER_IP}:9090"
 echo -e "  ${CYAN}Ray Dashboard${NC}   http://${CONTROLLER_IP}:8265"
 echo -e "  ${CYAN}Gateway direct${NC}  http://${CONTROLLER_IP}:18000"
+echo -e "  ${CYAN}Watchdog log${NC}    /tmp/llama-watchdog.log  (PID: $(cat /tmp/llama-watchdog.pid 2>/dev/null || echo 'not started'))"
 echo ""
 if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
     echo -e "  ${CYAN}Text nodes${NC}      WS-11/03/08 → Gemma 4 26B QAT (port 8080)"
