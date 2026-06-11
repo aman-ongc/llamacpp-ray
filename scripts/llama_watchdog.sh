@@ -28,6 +28,8 @@ MULTIMODAL_MMPROJ="/mnt/d/Models/qwen-3-vl/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"
 
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
 
+trap 'log "Watchdog stopping (signal received)."; exit 0' SIGTERM SIGINT
+
 remote_exec() {
     local ip="$1"; shift
     sshpass -p "$SSH_PASS" ssh \
@@ -101,6 +103,9 @@ check_and_restart() {
 }
 
 log "Watchdog started. Monitoring ${#NODES[@]} nodes every ${POLL_INTERVAL}s."
+# NOTE: node checks are sequential. If a node triggers a recovery wait (up to
+# RESTART_WAIT=120s), checks on subsequent nodes are delayed for that duration.
+# With 3 nodes, worst-case gap between checks on the last node is ~360s.
 while true; do
     for node in "${NODES[@]}"; do
         IFS='|' read -r ip type port <<< "$node"
