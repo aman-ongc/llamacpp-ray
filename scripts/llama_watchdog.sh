@@ -42,11 +42,11 @@ restart_text_node() {
     local ip="$1"
     local cmd="pkill -f llama-server || true; sleep 2; nohup ${LLAMA_SERVER} \
         -m ${TEXT_MODEL} \
-        -ngl 999 -c 131072 \
+        -ngl 999 -c 32768 \
         --host ${ip} --port 8080 \
         --parallel 1 \
         --flash-attn auto --cache-type-k q4_0 --cache-type-v q4_0 \
-        --cont-batching --metrics \
+        --cont-batching --no-context-shift --metrics \
         >/tmp/llama-server.log 2>&1 </dev/null &"
     if [[ "$ip" == "$CONTROLLER_IP" ]]; then
         eval "$cmd"

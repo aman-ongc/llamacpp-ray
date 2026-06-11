@@ -150,11 +150,12 @@ if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
         info "Starting Gemma 4 26B QAT on WS-11 (port ${TEXT_LLAMA_PORT})..."
         nohup "$LLAMA_SERVER" \
             -m "$TEXT_MODEL" \
-            -ngl 999 -c 131072 \
+            -ngl 999 -c 32768 \
             --host "$CONTROLLER_IP" --port "$TEXT_LLAMA_PORT" \
             --parallel 1 \
             --flash-attn auto --cache-type-k q4_0 --cache-type-v q4_0 \
             --cont-batching \
+            --no-context-shift \
             --metrics \
             >/tmp/llama-server-ws11.log 2>&1 </dev/null &
         ok "Gemma launched on WS-11 (log: /tmp/llama-server-ws11.log)"

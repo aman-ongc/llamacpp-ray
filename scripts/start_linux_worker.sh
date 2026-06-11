@@ -95,15 +95,15 @@ if ! curl --noproxy '*' -sf "http://$LLAMA_HOST:$LLAMA_PORT/health" >/dev/null 2
     nohup "$LLAMA_SERVER" \
       -m "$MODEL_PATH" \
       -ngl 999 \
-      -c 65536 \
+      -c 32768 \
       --host "$LLAMA_HOST" \
       --port "$LLAMA_PORT" \
       --parallel 1 \
-      --no-context-shift \
       --flash-attn auto \
       --cache-type-k q4_0 \
       --cache-type-v q4_0 \
       --cont-batching \
+      --no-context-shift \
       --metrics \
       >/tmp/llama-server.log 2>&1 </dev/null &
   fi

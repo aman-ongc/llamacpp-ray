@@ -67,6 +67,16 @@ class _LlamaWorkerBase:
                     body = {"error": exc.response.text or str(exc)}
                 body["node_ip"] = self.node_ip
                 return JSONResponse(body, status_code=exc.response.status_code)
+            except httpx.RemoteProtocolError:
+                return JSONResponse(
+                    {"error": "Inference server disconnected during generation. The server may have crashed. Please retry your request.", "node_ip": self.node_ip},
+                    status_code=503,
+                )
+            except httpx.ConnectError:
+                return JSONResponse(
+                    {"error": "Inference server unavailable. The server may be starting up or restarting. Please retry in a few moments.", "node_ip": self.node_ip},
+                    status_code=503,
+                )
             return JSONResponse(result)
         return JSONResponse({"error": "not found"}, status_code=404)
 

@@ -31,11 +31,11 @@ class Settings(BaseSettings):
     multimodal_serve_replicas: int = Field(default=1)
 
     # ── Shared llama.cpp settings ─────────────────────────────────────────────
-    llama_context: int = 65536
+    llama_context: int = 32768
     llama_parallel: int = 1
     llama_ngl: int = 999
 
-    request_timeout_seconds: float = 300.0
+    request_timeout_seconds: float = 1800.0
     connect_timeout_seconds: float = 2.0
 
     # Kept for backward compatibility with admin/logging code that references controller IP.

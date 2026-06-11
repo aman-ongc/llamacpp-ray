@@ -48,11 +48,11 @@ class LlamaServerProcess:
             "--host", self.host,
             "--port", str(self.port),
             "--parallel", str(settings.llama_parallel),
-            "--no-context-shift",
             "--flash-attn", "auto",
             "--cache-type-k", "q4_0",
             "--cache-type-v", "q4_0",
             "--cont-batching",
+            "--no-context-shift",
         ]
 
     def start(self) -> None:
