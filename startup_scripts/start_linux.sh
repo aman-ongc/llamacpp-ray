@@ -219,7 +219,7 @@ LLAMA_SERVER="$LLAMA_SERVER" \
 SSH_PASS="$SUDO_PASS" \
 nohup bash "$PROJECT_DIR/scripts/llama_watchdog.sh" \
     >> /tmp/llama-watchdog.log 2>&1 &
-echo $! > /tmp/llama-watchdog.pid
+echo "$!" > /tmp/llama-watchdog.pid
 ok "Watchdog PID $(cat /tmp/llama-watchdog.pid) — log: /tmp/llama-watchdog.log"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
