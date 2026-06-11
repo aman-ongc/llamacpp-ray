@@ -15,7 +15,7 @@ Observed token generation speed of **7–10 tok/s** when serving requests throug
 | WS-08 | 10.208.211.59   | Worker               | NVIDIA RTX A4000 (16 GB)   | 128 GB | 6 cores | WSL2 Ubuntu 24.04 |
 | WS-13 | 10.208.211.64   | Worker               | NVIDIA RTX A4000 (16 GB)   | 128 GB | 6 cores | WSL2 Ubuntu 24.04 |
 
-**Model:** Qwen3.6 35B A3B (MoE), GGUF Q4_K_XL quantisation
+**Model:** Gemma 4 26B A4, GGUF Q4_0 quantisation
 **Model size on disk:** ~20 GB
 **GPU VRAM per node:** 16 GB
 **Network:** 1 Gbps Ethernet (10.208.211.0/24)
@@ -61,7 +61,7 @@ completion_tokens / total_elapsed_time
 
 `predicted_per_second` is the true generation speed. The apparent 9–10 tok/s was inflated by slow prompt evaluation being included in the denominator.
 
-**Why prompt eval is slow:** The Qwen3.6 35B model (~20 GB) does not fully fit in 16 GB VRAM. A significant number of transformer layers are offloaded to CPU (6 cores). Prompt evaluation processes all input tokens as a batch through every layer — the CPU-offloaded layers must perform large matrix multiplications on the full prompt batch, which is slow on a 6-core CPU. Generation processes only 1 token per step through CPU layers, which is proportionally much faster.
+**Why prompt eval is slow:** The Gemma 4 26B model does not fully fit in 16 GB VRAM. A significant number of transformer layers are offloaded to CPU (6 cores). Prompt evaluation processes all input tokens as a batch through every layer — the CPU-offloaded layers must perform large matrix multiplications on the full prompt batch, which is slow on a 6-core CPU. Generation processes only 1 token per step through CPU layers, which is proportionally much faster.
 
 ---
 
@@ -90,7 +90,7 @@ With 8.6 GB consumed by KV cache on a 16 GB GPU, the model (~20 GB) could only l
 - `--parallel 2` → `--parallel 1`
 - `--cache-type-k q8_0 --cache-type-v q8_0` → `--cache-type-k q4_0 --cache-type-v q4_0`
 - `--flash-attn on` → `--flash-attn auto`
-- `--spec-draft-n-max 4` → `--spec-draft-n-max 2`
+- Removed `--spec-type draft-mtp --spec-draft-n-max 4` (MTP-specific, not applicable)
 
 Files updated: `startup_scripts/start_linux.sh`, `scripts/start_linux_worker.sh`, `worker/llama_process.py`, `gateway/config.py`
 
@@ -145,8 +145,7 @@ Same reorder applied to `start_linux.sh` for WS-11.
 
 ```bash
 llama-server \
-  -m /mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf \
-  --mmproj /mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/mmproj-F16.gguf \
+  -m /mnt/d/Models/gemma-4-26b-qat/gemma-4-26B_q4_0-it.gguf \
   -ngl 999 \
   -c 65536 \
   --host <node-ip> \
@@ -156,16 +155,14 @@ llama-server \
   --flash-attn auto \
   --cache-type-k q4_0 \
   --cache-type-v q4_0 \
-  --cont-batching \
-  --spec-type draft-mtp \
-  --spec-draft-n-max 2
+  --cont-batching
 ```
 
 ---
 
 ## Baseline Performance Reference
 
-All measurements on WS-08 (10.208.211.59), Qwen3.6 35B A3B Q4_K_XL, prompt: "Explain quantum computing in detail", `max_tokens=250`.
+All measurements on WS-08 (10.208.211.59), Gemma 4 26B A4 Q4_0, prompt: "Explain quantum computing in detail", `max_tokens=250`.
 
 | Metric | Value |
 |---|---|
@@ -181,17 +178,16 @@ All measurements on WS-08 (10.208.211.59), Qwen3.6 35B A3B Q4_K_XL, prompt: "Exp
 
 ## Fundamental Hardware Constraint
 
-The Qwen3.6 35B A3B model in Q4_K_XL quantisation (~20 GB) **exceeds the 16 GB VRAM** of each RTX A4000. This means:
+The Gemma 4 26B A4 model in Q4_0 quantisation **exceeds the 16 GB VRAM** of each RTX A4000. This means:
 
 - A portion of model layers always runs on CPU (6 cores)
 - Prompt evaluation will always be slower than generation proportionally
 - The maximum achievable generation speed is bounded by how many layers fit on GPU
-- Reducing context window (`-c`) or using lower quantisation (Q3_K_M) would allow more layers on GPU, improving both prompt eval and generation speeds — but the current configuration retains full 65536 context and vision (mmproj) support as a deliberate trade-off
+- Reducing context window (`-c`) or using lower quantisation would allow more layers on GPU, improving both prompt eval and generation speeds — but the current configuration retains full 65536 context as a deliberate trade-off
 
 **Options not taken (by design):**
 - Reducing `-c 65536` to free VRAM — context size is a hard requirement
-- Dropping `--mmproj` — vision support is required
-- Switching to Q3_K_M or lower — quality trade-off not accepted
+- Switching to lower quantisation — quality trade-off not accepted
 
 ---
 

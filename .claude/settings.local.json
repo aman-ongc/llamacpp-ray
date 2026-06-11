@@ -17,7 +17,8 @@
       "Bash(sshpass -V)",
       "Bash(sudo docker:*)",
       "Bash(cat startup_scripts/* scripts/*)",
-      "Bash(ssh:*)"
+      "Bash(ssh:*)",
+      "Bash(sshpass:*)"
     ]
   }
 }

@@ -42,7 +42,7 @@ Internal Users / Applications
          |
    llama.cpp server  (WS-11 :8080)
          |
-   Qwen3.6-35B-A3B GGUF on RTX A4000
+   Gemma 4 26B GGUF on RTX A4000
 ```
 
 All traffic enters via NGINX. The FastAPI gateway handles auth, logging, and rate limiting. It forwards inference requests to Ray Serve, which dispatches to a `LlamaCppWorker` actor. The worker calls the locally running llama.cpp server.
@@ -151,14 +151,12 @@ llama.cpp should run in a persistent session (tmux or screen):
 
 ```bash
 ./build/bin/llama-server \
-  -m /mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf \
-  --mmproj /mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/mmproj-F16.gguf \
+  -m /mnt/d/Models/gemma-4-26b-qat/gemma-4-26B_q4_0-it.gguf \
   -ngl 999 -c 65536 \
   --host 10.208.211.62 --port 8080 \
   --parallel 2 --no-context-shift \
   --flash-attn on \
-  --cache-type-k q8_0 --cache-type-v q8_0 \
-  --spec-type draft-mtp --spec-draft-n-max 4
+  --cache-type-k q8_0 --cache-type-v q8_0
 ```
 
 Check it is running:
@@ -281,7 +279,7 @@ curl --noproxy '*' -X POST http://10.208.211.62:10080/v1/chat/completions \
   -H "Authorization: Bearer sk-ongc-..." \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "qwen",
+    "model": "ongc-llm",
     "messages": [
       {"role": "system", "content": "/no_think"},
       {"role": "user", "content": "Summarise the importance of pressure maintenance."}
@@ -292,7 +290,7 @@ curl --noproxy '*' -X POST http://10.208.211.62:10080/v1/chat/completions \
   }'
 ```
 
-> **Qwen thinking mode:** By default Qwen 35B reasons before responding.
+> **Thinking mode:** By default Gemma 4 26B reasons before responding.
 > Add `{"role": "system", "content": "/no_think"}` to disable it.
 > Without this, `content` may be empty for short responses while `reasoning_content` holds the chain-of-thought.
 
@@ -318,7 +316,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="qwen",
+    model="ongc-llm",
     messages=[
         {"role": "system", "content": "/no_think"},
         {"role": "user", "content": "What is reservoir pressure?"}
@@ -458,13 +456,12 @@ bash scripts/deploy_workers.sh
 ssh administrator@10.208.211.54   # replace with worker IP
 
 ./build/bin/llama-server \
-  -m /mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf \
-  --mmproj /mnt/d/Models/Qwen3.6-35B-A3B-GGUF-MTP-Q4/mmproj-F16.gguf \
+  -m /mnt/d/Models/gemma-4-26b-qat/gemma-4-26B_q4_0-it.gguf \
   -ngl 999 -c 65536 \
   --host 10.208.211.54 --port 8080 \
   --parallel 2 --no-context-shift \
   --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
-  --cont-batching --spec-type draft-mtp --spec-draft-n-max 4 &
+  --cont-batching &
 ```
 
 ### Step 4: Join worker to Ray cluster
@@ -510,7 +507,7 @@ Create `.env` in project root to override.
 | Env Var | Default | Description |
 |---|---|---|
 | `RAY_SERVE_URL` | `http://10.208.211.62:8001` | Ray Serve endpoint |
-| `DEFAULT_MODEL` | `qwen` | Model name in `/v1/models` |
+| `DEFAULT_MODEL` | `ongc-llm` | Model name in `/v1/models` |
 | `REQUEST_TIMEOUT_SECONDS` | `300.0` | Timeout for inference calls |
 | `CONNECT_TIMEOUT_SECONDS` | `2.0` | Timeout connecting to Ray Serve |
 | `LLAMA_PORT` | `8080` | Port llama.cpp listens on per node |
@@ -607,9 +604,9 @@ export NO_PROXY="$no_proxy"
 export RAY_grpc_enable_http_proxy=0
 ```
 
-### Empty `content` in Qwen responses
+### Empty `content` in responses
 
-Qwen 35B is in thinking mode. Chain-of-thought is in `reasoning_content`; `content` is empty on short prompts.
+Gemma 4 26B is in thinking mode. Chain-of-thought is in `reasoning_content`; `content` is empty on short prompts.
 Fix: add `{"role": "system", "content": "/no_think"}` to every request.
 
 ### Corporate proxy blocking internal calls
@@ -666,4 +663,4 @@ Postgres data, Grafana dashboards, and all API keys/users survive restarts via D
 
 ---
 
-*ONGC Intranet AI Infrastructure — Qwen3.6-35B A3B + llama.cpp + Ray Serve + FastAPI*
+*ONGC Intranet AI Infrastructure — Gemma 4 26B + llama.cpp + Ray Serve + FastAPI*

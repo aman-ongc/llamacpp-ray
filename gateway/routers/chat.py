@@ -211,7 +211,27 @@ async def chat_completions(
         PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(prompt_tokens)
         COMPLETION_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(completion_tokens)
         return JSONResponse(result)
-    except HTTPException:
+    except HTTPException as exc:
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        error_str = json.dumps(exc.detail) if isinstance(exc.detail, (dict, list)) else str(exc.detail)
+        REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code=str(exc.status_code), streaming="false", username=user.username, node_ip="unknown").inc()
+        await log_request(
+            session,
+            user=user,
+            api_key_prefix=api_key_prefix,
+            model=_MODEL_ALIAS,
+            node_ip=settings.multimodal_node_ip if multimodal else None,
+            prompt_tokens=_estimate_prompt_tokens(payload.messages),
+            completion_tokens=0,
+            latency_ms=latency_ms,
+            queue_ms=0,
+            status_code=exc.status_code,
+            error_message=error_str,
+            streaming=payload.stream,
+            request_type=request_type,
+            request_preview=_build_request_preview(payload.messages, full=True),
+            response_preview=error_str,
+        )
         raise
     except Exception as exc:
         latency_ms = int((time.perf_counter() - start) * 1000)

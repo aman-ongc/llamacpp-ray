@@ -32,7 +32,7 @@ Authorization: Bearer <your-api-key>
 
 | Parameter          | Type            | Default   | Description |
 |--------------------|-----------------|-----------|-------------|
-| `model`            | string          | `"qwen"`  | Model identifier. Use `"qwen"` for Qwen3.6 35B. |
+| `model`            | string          | `"ongc-llm"`  | Model identifier. Use `"ongc-llm"` for Gemma 4 26B. |
 | `messages`         | array           | required  | Conversation turns. See examples below. |
 | `max_tokens`       | integer         | `256`     | Maximum tokens to generate. |
 | `temperature`      | float           | `0.7`     | Sampling temperature. `0.0` = deterministic, `1.0` = more creative. |
@@ -60,7 +60,7 @@ curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
-    "model": "qwen",
+    "model": "ongc-llm",
     "messages": [
       {"role": "user", "content": "Explain what is a transformer model in simple terms."}
     ],
@@ -79,7 +79,7 @@ curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
-    "model": "qwen",
+    "model": "ongc-llm",
     "messages": [
       {"role": "user", "content": "Write a short poem about the ocean."}
     ],
@@ -106,7 +106,7 @@ curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
-    "model": "qwen",
+    "model": "ongc-llm",
     "messages": [
       {"role": "system", "content": "You are a helpful assistant for ONGC engineers. Answer concisely and technically."},
       {"role": "user", "content": "What is the difference between a separator and a scrubber?"}
@@ -126,7 +126,7 @@ curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
-    "model": "qwen",
+    "model": "ongc-llm",
     "messages": [
       {"role": "user", "content": "What is machine learning?"},
       {"role": "assistant", "content": "Machine learning is a branch of AI where systems learn patterns from data."},
@@ -148,7 +148,7 @@ This pins your requests to the same GPU worker. Useful for interactive chat sess
 
 ### 5. Thinking Mode (Extended Reasoning)
 
-Qwen3.6 supports a thinking mode where the model reasons step-by-step before producing a final answer. This is useful for maths, logic, code, and complex analysis.
+Gemma 4 26B supports a thinking mode where the model reasons step-by-step before producing a final answer. This is useful for maths, logic, code, and complex analysis.
 
 **Enable thinking for a single request:**
 ```bash
@@ -156,7 +156,7 @@ curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
-    "model": "qwen",
+    "model": "ongc-llm",
     "messages": [
       {"role": "user", "content": "A train travels 120 km in 1.5 hours. What is its speed in m/s?"}
     ],
@@ -171,7 +171,7 @@ curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{
-    "model": "qwen",
+    "model": "ongc-llm",
     "messages": [
       {"role": "user", "content": "Summarise the following paragraph in one sentence: ..."}
     ],
@@ -188,7 +188,7 @@ If `enable_thinking` is omitted, the server default is used (configured by the p
 
 ### 6. Image Input — Single Image
 
-The model supports vision (image + text) because it is loaded with a multimodal projector. Send images as base64-encoded strings inside the `content` array.
+Vision (image + text) requests are handled by the dedicated multimodal node (WS-13, Qwen3-VL-8B). Send images as base64-encoded strings inside the `content` array.
 
 ```bash
 # Encode image first
@@ -198,7 +198,7 @@ curl --noproxy '*' http://10.208.211.62:18000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d "{
-    \"model\": \"qwen\",
+    \"model\": \"ongc-llm\",
     \"messages\": [
       {
         \"role\": \"user\",
@@ -223,7 +223,7 @@ response = requests.post(
     "http://10.208.211.62:18000/v1/chat/completions",
     headers={"Authorization": "Bearer YOUR_API_KEY"},
     json={
-        "model": "qwen",
+        "model": "ongc-llm",
         "messages": [
             {
                 "role": "user",
@@ -254,7 +254,7 @@ response = requests.post(
     "http://10.208.211.62:18000/v1/chat/completions",
     headers={"Authorization": "Bearer YOUR_API_KEY"},
     json={
-        "model": "qwen",
+        "model": "ongc-llm",
         "messages": [
             {"role": "system", "content": "You are an expert petroleum engineer. Analyse diagrams precisely."},
             {
@@ -292,7 +292,7 @@ response = requests.post(
     "http://10.208.211.62:18000/v1/chat/completions",
     headers={"Authorization": "Bearer YOUR_API_KEY"},
     json={
-        "model": "qwen",
+        "model": "ongc-llm",
         "messages": [
             {
                 "role": "user",
@@ -316,7 +316,7 @@ response = requests.post(
 **Creative / varied output** — higher temperature, higher top_p:
 ```json
 {
-  "model": "qwen",
+  "model": "ongc-llm",
   "messages": [{"role": "user", "content": "Write a creative story opening."}],
   "max_tokens": 512,
   "temperature": 0.9,
@@ -328,7 +328,7 @@ response = requests.post(
 **Deterministic / factual output** — low temperature:
 ```json
 {
-  "model": "qwen",
+  "model": "ongc-llm",
   "messages": [{"role": "user", "content": "What is the boiling point of water at sea level?"}],
   "max_tokens": 128,
   "temperature": 0.1,
@@ -339,7 +339,7 @@ response = requests.post(
 **Reduce repetition** — raise repeat_penalty:
 ```json
 {
-  "model": "qwen",
+  "model": "ongc-llm",
   "messages": [{"role": "user", "content": "Explain neural networks in detail."}],
   "max_tokens": 1024,
   "temperature": 0.7,
@@ -368,7 +368,7 @@ def stream_chat(prompt: str, api_key: str):
         "http://10.208.211.62:18000/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}"},
         json={
-            "model": "qwen",
+            "model": "ongc-llm",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 1024,
             "stream": True,
@@ -409,7 +409,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="qwen",
+    model="ongc-llm",
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Summarise the key risks in offshore drilling."},
@@ -424,7 +424,7 @@ print(response.choices[0].message.content)
 **Streaming with openai SDK:**
 ```python
 stream = client.chat.completions.create(
-    model="qwen",
+    model="ongc-llm",
     messages=[{"role": "user", "content": "List ten safety protocols for a refinery."}],
     max_tokens=1024,
     stream=True,

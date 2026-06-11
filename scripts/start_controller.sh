@@ -40,9 +40,9 @@ if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
     echo "[controller] Starting Gemma 4 26B QAT on port ${TEXT_LLAMA_PORT}..."
     nohup "$LLAMA_SERVER" \
       -m "$TEXT_MODEL" \
-      -ngl 999 -c 65536 \
+      -ngl 999 -c 131072 \
       --host "$RAY_HEAD_IP" --port "$TEXT_LLAMA_PORT" \
-      --parallel 1 --no-context-shift \
+      --parallel 1 \
       --flash-attn auto --cache-type-k q4_0 --cache-type-v q4_0 \
       --cont-batching \
       --metrics \
