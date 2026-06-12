@@ -95,7 +95,7 @@ if ! curl --noproxy '*' -sf "http://$LLAMA_HOST:$LLAMA_PORT/health" >/dev/null 2
     nohup "$LLAMA_SERVER" \
       -m "$MODEL_PATH" \
       -ngl 999 \
-      -c 32768 \
+      -c 65536 \
       --host "$LLAMA_HOST" \
       --port "$LLAMA_PORT" \
       --parallel 1 \

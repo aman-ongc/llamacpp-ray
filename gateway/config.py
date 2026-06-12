@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     multimodal_serve_replicas: int = Field(default=1)
 
     # ── Shared llama.cpp settings ─────────────────────────────────────────────
-    llama_context: int = 32768
+    llama_context: int = 65536
     llama_parallel: int = 1
     llama_ngl: int = 999
 

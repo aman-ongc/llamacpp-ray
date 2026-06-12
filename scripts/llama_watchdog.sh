@@ -42,7 +42,7 @@ restart_text_node() {
     local ip="$1"
     local cmd="pkill -f llama-server || true; sleep 2; nohup ${LLAMA_SERVER} \
         -m ${TEXT_MODEL} \
-        -ngl 999 -c 32768 \
+        -ngl 999 -c 65536 \
         --host ${ip} --port 8080 \
         --parallel 1 \
         --flash-attn auto --cache-type-k q4_0 --cache-type-v q4_0 \
