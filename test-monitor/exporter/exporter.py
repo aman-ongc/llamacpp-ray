@@ -10,7 +10,7 @@ Simulates the full ONGC LLM cluster:
 Cluster layout:
   Controller : 10.208.211.62  (text pool, excluded from Ray by default)
   Text pool  : 10.208.211.52–.61  (10 nodes, Gemma 4 26B, --parallel 1)
-  Multimodal : 10.208.211.63/.64/.65/.67  (4 nodes, Qwen3-VL-8B, --parallel 4, -c 16384)
+  Multimodal : 10.208.211.63/.64/.65/.67  (4 nodes, Qwen3-VL-8B, --parallel 4, -c 65536)
 
 All per-node metrics carry the real ONGC IP:port instance labels
 so the production Grafana dashboards render correctly.

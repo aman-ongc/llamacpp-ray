@@ -13,7 +13,7 @@ CONTROLLER_IP="10.208.211.62"
 
 # Node list: "ip|type|port"
 # text = Gemma 4 26B QAT (--parallel 1, -c 65536)
-# multimodal = Qwen3-VL-8B + mmproj (--parallel 4, -c 16384)
+# multimodal = Qwen3-VL-8B + mmproj (--parallel 4, -c 65536)
 NODES=(
     "10.208.211.52|text|8080"
     "10.208.211.53|text|8080"
@@ -73,7 +73,7 @@ restart_multimodal_node() {
         nohup ${LLAMA_SERVER} \
         -m ${MULTIMODAL_MODEL} \
         --mmproj ${MULTIMODAL_MMPROJ} \
-        -ngl 999 -c 16384 \
+        -ngl 999 -c 65536 \
         --host ${ip} --port 8080 \
         --parallel 4 \
         --flash-attn auto --cache-type-k q8_0 --cache-type-v q8_0 \

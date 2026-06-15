@@ -11,7 +11,7 @@ VENV_PATH="${VENV_PATH:-/mnt/d/VirtualEnvironments/llm-platform}"
 LLAMA_SERVER="${LLAMA_SERVER:-/home/administrator/projects/local_llm/llama.cpp/build/bin/llama-server}"
 
 # ── Node type detection ────────────────────────────────────────────────────────
-# Multimodal nodes (.63/.64/.65/.67): Qwen3-VL-8B, --parallel 4, -c 16384
+# Multimodal nodes (.63/.64/.65/.67): Qwen3-VL-8B, --parallel 4, -c 65536
 # All other nodes: Gemma 4 26B QAT, --parallel 1, -c 65536
 MULTIMODAL_NODE_IPS=("10.208.211.63" "10.208.211.64" "10.208.211.65" "10.208.211.67")
 
@@ -87,7 +87,7 @@ if ! curl --noproxy '*' -sf "http://$LLAMA_HOST:$LLAMA_PORT/health" >/dev/null 2
       -m "$MODEL_PATH" \
       --mmproj "$MMPROJ_PATH" \
       -ngl 999 \
-      -c 16384 \
+      -c 65536 \
       --host "$LLAMA_HOST" \
       --port "$LLAMA_PORT" \
       --parallel 4 \

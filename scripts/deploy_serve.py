@@ -6,7 +6,7 @@ Deploy TextWorker and MultimodalWorker as separate Ray Serve applications.
                                     unless CONTROLLER_AS_WORKER=true)
                                     proxies to Gemma 4 26B QAT on port 8080
 - MultimodalWorker (route /multi) — 4 replicas across .63/.64/.65/.67
-                                    proxies to Qwen3-VL-8B on port 8080 (-c 16384 --parallel 4)
+                                    proxies to Qwen3-VL-8B on port 8080 (-c 65536 --parallel 4)
 
 Node pinning uses custom Ray resources:
   text nodes       : ray start --resources='{"text_node": 1}'

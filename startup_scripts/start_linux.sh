@@ -7,7 +7,7 @@
 # Node layout:
 #   WS-11  (10.208.211.62) — Ray head; text worker only if CONTROLLER_AS_WORKER=true
 #   Text   (10.208.211.52–.61) — 10 nodes, Gemma 4 26B QAT, --parallel 1, -c 65536
-#   Multi  (10.208.211.63/.64/.65/.67) — 4 nodes, Qwen3-VL-8B, --parallel 4, -c 16384
+#   Multi  (10.208.211.63/.64/.65/.67) — 4 nodes, Qwen3-VL-8B, --parallel 4, -c 65536
 # =============================================================================
 set -euo pipefail
 
@@ -28,7 +28,7 @@ CONTROLLER_IP="10.208.211.62"
 TEXT_LLAMA_PORT=8080
 TEXT_MODEL="/mnt/d/Models/gemma-4-26b-qat/gemma-4-26B_q4_0-it.gguf"
 
-# Multimodal workers (.63/.64/.65/.67): Qwen3-VL-8B, -c 16384 --parallel 4
+# Multimodal workers (.63/.64/.65/.67): Qwen3-VL-8B, -c 65536 --parallel 4
 MULTIMODAL_NODE_IPS=("10.208.211.63" "10.208.211.64" "10.208.211.65" "10.208.211.67")
 MULTIMODAL_LLAMA_PORT=8080
 MULTIMODAL_MODEL="/mnt/d/Models/qwen-3-vl/Qwen3VL-8B-Instruct-Q8_0.gguf"
@@ -249,7 +249,7 @@ if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
 else
     echo -e "  ${CYAN}Text nodes${NC}      .52–.61 (10 nodes) → Gemma 4 26B QAT --parallel 1  [WS-11 head-only]"
 fi
-echo -e "  ${CYAN}Multimodal${NC}      .63/.64/.65/.67 (4 nodes) → Qwen3-VL-8B --parallel 4 -c 16384"
+echo -e "  ${CYAN}Multimodal${NC}      .63/.64/.65/.67 (4 nodes) → Qwen3-VL-8B --parallel 4 -c 65536"
 echo ""
 echo -e "  ${YELLOW}Manage users/keys:${NC}"
 echo -e "    curl --noproxy '*' http://${CONTROLLER_IP}:10080/admin/users -H 'X-Admin-Secret: changeme'"

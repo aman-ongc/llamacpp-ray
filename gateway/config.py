@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # ── Shared llama.cpp settings ─────────────────────────────────────────────
     llama_context: int = 65536
     llama_parallel: int = 1
-    multimodal_llama_context: int = 16384
+    multimodal_llama_context: int = 65536
     multimodal_llama_parallel: int = 4
     llama_ngl: int = 999
 
