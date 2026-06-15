@@ -10,16 +10,27 @@ scrape_configs:
 
   - job_name: "node-exporter"
     static_configs:
+      # Controller (WS-11) — reached via host bridge inside Docker
       - targets:
           - "host.docker.internal:9100"
         labels:
           instance: "10.208.211.62:9100"
-      - targets:
-          - "10.208.211.54:9100"
-      - targets:
-          - "10.208.211.59:9100"
-      - targets:
-          - "10.208.211.64:9100"
+      # Text workers (.52–.61)
+      - targets: ["10.208.211.52:9100"]
+      - targets: ["10.208.211.53:9100"]
+      - targets: ["10.208.211.54:9100"]
+      - targets: ["10.208.211.55:9100"]
+      - targets: ["10.208.211.56:9100"]
+      - targets: ["10.208.211.57:9100"]
+      - targets: ["10.208.211.58:9100"]
+      - targets: ["10.208.211.59:9100"]
+      - targets: ["10.208.211.60:9100"]
+      - targets: ["10.208.211.61:9100"]
+      # Multimodal workers (.63, .64, .65, .67)
+      - targets: ["10.208.211.63:9100"]
+      - targets: ["10.208.211.64:9100"]
+      - targets: ["10.208.211.65:9100"]
+      - targets: ["10.208.211.67:9100"]
     relabel_configs:
       - source_labels: [__address__]
         regex: "host\\.docker\\.internal:(.*)"
@@ -32,12 +43,20 @@ scrape_configs:
           - "host.docker.internal:9835"
         labels:
           instance: "10.208.211.62:9835"
-      - targets:
-          - "10.208.211.54:9835"
-      - targets:
-          - "10.208.211.59:9835"
-      - targets:
-          - "10.208.211.64:9835"
+      - targets: ["10.208.211.52:9835"]
+      - targets: ["10.208.211.53:9835"]
+      - targets: ["10.208.211.54:9835"]
+      - targets: ["10.208.211.55:9835"]
+      - targets: ["10.208.211.56:9835"]
+      - targets: ["10.208.211.57:9835"]
+      - targets: ["10.208.211.58:9835"]
+      - targets: ["10.208.211.59:9835"]
+      - targets: ["10.208.211.60:9835"]
+      - targets: ["10.208.211.61:9835"]
+      - targets: ["10.208.211.63:9835"]
+      - targets: ["10.208.211.64:9835"]
+      - targets: ["10.208.211.65:9835"]
+      - targets: ["10.208.211.67:9835"]
 
   - job_name: "llama-cpp"
     static_configs:
@@ -45,10 +64,18 @@ scrape_configs:
           - "host.docker.internal:8080"
         labels:
           instance: "10.208.211.62:8080"
-      - targets:
-          - "10.208.211.54:8080"
-      - targets:
-          - "10.208.211.59:8080"
-      - targets:
-          - "10.208.211.64:8080"
+      - targets: ["10.208.211.52:8080"]
+      - targets: ["10.208.211.53:8080"]
+      - targets: ["10.208.211.54:8080"]
+      - targets: ["10.208.211.55:8080"]
+      - targets: ["10.208.211.56:8080"]
+      - targets: ["10.208.211.57:8080"]
+      - targets: ["10.208.211.58:8080"]
+      - targets: ["10.208.211.59:8080"]
+      - targets: ["10.208.211.60:8080"]
+      - targets: ["10.208.211.61:8080"]
+      - targets: ["10.208.211.63:8080"]
+      - targets: ["10.208.211.64:8080"]
+      - targets: ["10.208.211.65:8080"]
+      - targets: ["10.208.211.67:8080"]
     metrics_path: /metrics

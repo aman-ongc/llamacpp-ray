@@ -12,11 +12,23 @@ CONTROLLER_AS_WORKER="${CONTROLLER_AS_WORKER:-false}"
 CONTROLLER_IP="10.208.211.62"
 
 # Node list: "ip|type|port"
-# text = Gemma 4 26B QAT   multimodal = Qwen3-VL-8B + mmproj
+# text = Gemma 4 26B QAT (--parallel 1, -c 65536)
+# multimodal = Qwen3-VL-8B + mmproj (--parallel 4, -c 16384)
 NODES=(
+    "10.208.211.52|text|8080"
+    "10.208.211.53|text|8080"
     "10.208.211.54|text|8080"
+    "10.208.211.55|text|8080"
+    "10.208.211.56|text|8080"
+    "10.208.211.57|text|8080"
+    "10.208.211.58|text|8080"
     "10.208.211.59|text|8080"
+    "10.208.211.60|text|8080"
+    "10.208.211.61|text|8080"
+    "10.208.211.63|multimodal|8080"
     "10.208.211.64|multimodal|8080"
+    "10.208.211.65|multimodal|8080"
+    "10.208.211.67|multimodal|8080"
 )
 if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
     NODES+=("${CONTROLLER_IP}|text|8080")
@@ -61,9 +73,9 @@ restart_multimodal_node() {
         nohup ${LLAMA_SERVER} \
         -m ${MULTIMODAL_MODEL} \
         --mmproj ${MULTIMODAL_MMPROJ} \
-        -ngl 999 -c 32768 \
+        -ngl 999 -c 16384 \
         --host ${ip} --port 8080 \
-        --parallel 2 \
+        --parallel 4 \
         --flash-attn auto --cache-type-k q8_0 --cache-type-v q8_0 \
         --cont-batching --metrics \
         >/tmp/llama-server.log 2>&1 </dev/null &"
@@ -105,7 +117,8 @@ check_and_restart() {
 log "Watchdog started. Monitoring ${#NODES[@]} nodes every ${POLL_INTERVAL}s."
 # NOTE: node checks are sequential. If a node triggers a recovery wait (up to
 # RESTART_WAIT=120s), checks on subsequent nodes are delayed for that duration.
-# With 3 nodes, worst-case gap between checks on the last node is ~360s.
+# With 14 nodes, worst-case gap between checks on the last node is ~1680s.
+# In practice recovery is rare; healthy nodes return in <1s each.
 while true; do
     for node in "${NODES[@]}"; do
         IFS='|' read -r ip type port <<< "$node"

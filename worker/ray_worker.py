@@ -11,9 +11,9 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from gateway.config import settings
 
-# WS-13: multimodal node running Qwen3-VL on port 8080.
-# All other nodes are text nodes running Gemma on port 8080.
-_MULTIMODAL_NODE_IP = settings.multimodal_node_ip
+_MULTIMODAL_NODE_IPS: set[str] = {
+    ip.strip() for ip in settings.multimodal_node_ips.split(",") if ip.strip()
+}
 
 
 def _resolve_node_ip() -> str:
@@ -21,7 +21,7 @@ def _resolve_node_ip() -> str:
 
 
 def _llama_port_for_node(node_ip: str) -> int:
-    if node_ip == _MULTIMODAL_NODE_IP:
+    if node_ip in _MULTIMODAL_NODE_IPS:
         return settings.multimodal_llama_port
     return settings.text_llama_port
 
@@ -110,6 +110,7 @@ class _LlamaWorkerBase:
 # Text nodes (WS-11, WS-03, WS-08) must be started with --resources='{"text_node": 1}'.
 @serve.deployment(
     num_replicas=settings.text_serve_replicas,
+    max_ongoing_requests=settings.llama_parallel,
     ray_actor_options={"num_cpus": 1, "resources": {"text_node": 0.01}},
 )
 class TextWorker(_LlamaWorkerBase):
@@ -121,6 +122,7 @@ class TextWorker(_LlamaWorkerBase):
 # WS-13 must be started with --resources='{"multimodal_node": 1}'.
 @serve.deployment(
     num_replicas=settings.multimodal_serve_replicas,
+    max_ongoing_requests=settings.multimodal_llama_parallel,
     ray_actor_options={"num_cpus": 1, "resources": {"multimodal_node": 0.01}},
 )
 class MultimodalWorker(_LlamaWorkerBase):

@@ -15,10 +15,22 @@ services:
       - "9101:9101"   # main /metrics  (for manual inspection)
     expose:
       - "9101"
-      - "9201"
-      - "9202"
-      - "9203"
-      - "9204"
+      # Stub node-exporter/gpu-exporter/llama-cpp endpoints (one per cluster node)
+      - "9201"   # 10.208.211.62 (controller)
+      - "9202"   # 10.208.211.52
+      - "9203"   # 10.208.211.53
+      - "9204"   # 10.208.211.54
+      - "9205"   # 10.208.211.55
+      - "9206"   # 10.208.211.56
+      - "9207"   # 10.208.211.57
+      - "9208"   # 10.208.211.58
+      - "9209"   # 10.208.211.59
+      - "9210"   # 10.208.211.60
+      - "9211"   # 10.208.211.61
+      - "9212"   # 10.208.211.63
+      - "9213"   # 10.208.211.64
+      - "9214"   # 10.208.211.65
+      - "9215"   # 10.208.211.67
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9101/health')\""]
       interval: 10s

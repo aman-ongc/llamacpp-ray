@@ -22,7 +22,7 @@ cd "$INSTALL_DIR"
 
 if [ ! -x "$INSTALL_DIR/node_exporter-${VERSION}.linux-amd64/node_exporter" ]; then
   if [ ! -f "$TARBALL" ]; then
-    wget -q "$URL"
+    wget -q --timeout=30 --tries=1 "$URL"
   fi
   tar xzf "$TARBALL"
 fi
@@ -32,12 +32,13 @@ nohup "$INSTALL_DIR/node_exporter-${VERSION}.linux-amd64/node_exporter" \
   --collector.filesystem.mount-points-exclude='^/(dev|proc|run|run/user.*|sys|var/lib/docker/.+|var/lib/containers/storage/.+)($|/)' \
   >/tmp/node_exporter.log 2>&1 </dev/null &
 
+LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 for _ in {1..20}; do
-  if curl --noproxy '*' -sf "http://127.0.0.1:${PORT}/metrics" >/dev/null 2>&1; then
+  if curl --noproxy '*' --max-time 5 -sf "http://${LOCAL_IP}:${PORT}/metrics" >/dev/null 2>&1; then
     echo "node_exporter running on :${PORT}"
     exit 0
   fi
-  sleep 1
+  sleep 2
 done
 
 echo "node_exporter did not become healthy" >&2

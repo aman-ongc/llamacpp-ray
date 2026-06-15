@@ -17,22 +17,30 @@ class Settings(BaseSettings):
     # Unified model name exposed to users — routing is transparent.
     default_model: str = "ongc-llm"
 
-    # ── Text pool: WS-11 + WS-03 + WS-08 running Gemma 4 26B QAT ─────────────
-    text_node_ips: str = Field(default="10.208.211.62,10.208.211.54,10.208.211.59")
+    # ── Text pool: .52–.61 + .62 (WS-11, excluded unless controller_as_worker=true) ──
+    text_node_ips: str = Field(
+        default="10.208.211.52,10.208.211.53,10.208.211.54,10.208.211.55,"
+                "10.208.211.56,10.208.211.57,10.208.211.58,10.208.211.59,"
+                "10.208.211.60,10.208.211.61,10.208.211.62"
+    )
     text_llama_port: int = 8080
     text_llama_model_path: str = "/mnt/d/Models/gemma-4-26b-qat/gemma-4-26B_q4_0-it.gguf"
-    text_serve_replicas: int = Field(default=3)
+    text_serve_replicas: int = Field(default=10)
 
-    # ── Multimodal pool: WS-13 running Qwen3-VL-8B-Instruct ──────────────────
-    multimodal_node_ip: str = Field(default="10.208.211.64")
+    # ── Multimodal pool: .63, .64, .65, .67 running Qwen3-VL-8B-Instruct ────
+    multimodal_node_ips: str = Field(
+        default="10.208.211.63,10.208.211.64,10.208.211.65,10.208.211.67"
+    )
     multimodal_llama_port: int = 8080
     multimodal_llama_model_path: str = "/mnt/d/Models/qwen-3-vl/Qwen3VL-8B-Instruct-Q8_0.gguf"
     multimodal_llama_mmproj_path: str = "/mnt/d/Models/qwen-3-vl/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"
-    multimodal_serve_replicas: int = Field(default=1)
+    multimodal_serve_replicas: int = Field(default=4)
 
     # ── Shared llama.cpp settings ─────────────────────────────────────────────
     llama_context: int = 65536
     llama_parallel: int = 1
+    multimodal_llama_context: int = 16384
+    multimodal_llama_parallel: int = 4
     llama_ngl: int = 999
 
     request_timeout_seconds: float = 1800.0
@@ -41,17 +49,22 @@ class Settings(BaseSettings):
     # Kept for backward compatibility with admin/logging code that references controller IP.
     controller_node_ip: str = Field(default="10.208.211.62")
     # All worker node IPs (excluding controller) — used by admin/infra tooling.
-    worker_node_ips: str = Field(default="10.208.211.54,10.208.211.59,10.208.211.64")
+    worker_node_ips: str = Field(
+        default="10.208.211.52,10.208.211.53,10.208.211.54,10.208.211.55,"
+                "10.208.211.56,10.208.211.57,10.208.211.58,10.208.211.59,"
+                "10.208.211.60,10.208.211.61,"
+                "10.208.211.63,10.208.211.64,10.208.211.65,10.208.211.67"
+    )
 
     # ── Controller-as-worker toggle ───────────────────────────────────────────
-    # When false (default): WS-11 is excluded from text node pool and no
-    # llama-server is started on it. Only WS-03 and WS-08 serve text requests.
-    # When true: WS-11 joins the text pool (3 replicas, llama-server started).
+    # When false (default): WS-11 (.62) is excluded from the text pool — 10 replicas active.
+    # When true: WS-11 joins the text pool — 11 replicas active.
     # Set via env var: CONTROLLER_AS_WORKER=true
     controller_as_worker: bool = Field(default=False)
 
     @model_validator(mode="after")
-    def _apply_controller_worker_setting(self) -> "Settings":
+    def _apply_node_settings(self) -> "Settings":
+        # Exclude controller from text pool unless explicitly opted in.
         if not self.controller_as_worker:
             ips = [
                 ip.strip()
@@ -60,6 +73,9 @@ class Settings(BaseSettings):
             ]
             self.text_node_ips = ",".join(ips)
             self.text_serve_replicas = len(ips)
+        # Derive multimodal replica count from the IP list.
+        multimodal_ips = [ip.strip() for ip in self.multimodal_node_ips.split(",") if ip.strip()]
+        self.multimodal_serve_replicas = len(multimodal_ips)
         return self
 
 

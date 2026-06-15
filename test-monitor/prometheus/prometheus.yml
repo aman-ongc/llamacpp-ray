@@ -10,38 +10,105 @@ scrape_configs:
     static_configs:
       - targets: ["exporter:9101"]
 
-  # Simulated node-exporter — 4 stub targets so up{job="node-exporter"} = 4
+  # Simulated node-exporter — 15 stub targets so up{job="node-exporter"} = 15
+  # Ports 9201-9215 map to: .62, .52-.61 (text), .63/.64/.65/.67 (multimodal)
   - job_name: "node-exporter"
     static_configs:
       - targets: ["exporter:9201"]
         labels: {instance: "10.208.211.62:9100"}
       - targets: ["exporter:9202"]
-        labels: {instance: "10.208.211.54:9100"}
+        labels: {instance: "10.208.211.52:9100"}
       - targets: ["exporter:9203"]
-        labels: {instance: "10.208.211.59:9100"}
+        labels: {instance: "10.208.211.53:9100"}
       - targets: ["exporter:9204"]
+        labels: {instance: "10.208.211.54:9100"}
+      - targets: ["exporter:9205"]
+        labels: {instance: "10.208.211.55:9100"}
+      - targets: ["exporter:9206"]
+        labels: {instance: "10.208.211.56:9100"}
+      - targets: ["exporter:9207"]
+        labels: {instance: "10.208.211.57:9100"}
+      - targets: ["exporter:9208"]
+        labels: {instance: "10.208.211.58:9100"}
+      - targets: ["exporter:9209"]
+        labels: {instance: "10.208.211.59:9100"}
+      - targets: ["exporter:9210"]
+        labels: {instance: "10.208.211.60:9100"}
+      - targets: ["exporter:9211"]
+        labels: {instance: "10.208.211.61:9100"}
+      - targets: ["exporter:9212"]
+        labels: {instance: "10.208.211.63:9100"}
+      - targets: ["exporter:9213"]
         labels: {instance: "10.208.211.64:9100"}
+      - targets: ["exporter:9214"]
+        labels: {instance: "10.208.211.65:9100"}
+      - targets: ["exporter:9215"]
+        labels: {instance: "10.208.211.67:9100"}
 
-  # Simulated nvidia-gpu-exporter targets (stub, GPU metrics come from llm-gateway job)
+  # Simulated nvidia-gpu-exporter (stub; GPU metrics come from llm-gateway job)
   - job_name: "nvidia-gpu-exporter"
     static_configs:
       - targets: ["exporter:9201"]
         labels: {instance: "10.208.211.62:9835"}
       - targets: ["exporter:9202"]
-        labels: {instance: "10.208.211.54:9835"}
+        labels: {instance: "10.208.211.52:9835"}
       - targets: ["exporter:9203"]
-        labels: {instance: "10.208.211.59:9835"}
+        labels: {instance: "10.208.211.53:9835"}
       - targets: ["exporter:9204"]
+        labels: {instance: "10.208.211.54:9835"}
+      - targets: ["exporter:9205"]
+        labels: {instance: "10.208.211.55:9835"}
+      - targets: ["exporter:9206"]
+        labels: {instance: "10.208.211.56:9835"}
+      - targets: ["exporter:9207"]
+        labels: {instance: "10.208.211.57:9835"}
+      - targets: ["exporter:9208"]
+        labels: {instance: "10.208.211.58:9835"}
+      - targets: ["exporter:9209"]
+        labels: {instance: "10.208.211.59:9835"}
+      - targets: ["exporter:9210"]
+        labels: {instance: "10.208.211.60:9835"}
+      - targets: ["exporter:9211"]
+        labels: {instance: "10.208.211.61:9835"}
+      - targets: ["exporter:9212"]
+        labels: {instance: "10.208.211.63:9835"}
+      - targets: ["exporter:9213"]
         labels: {instance: "10.208.211.64:9835"}
+      - targets: ["exporter:9214"]
+        labels: {instance: "10.208.211.65:9835"}
+      - targets: ["exporter:9215"]
+        labels: {instance: "10.208.211.67:9835"}
 
-  # Simulated llama-cpp targets (stub, llama metrics come from llm-gateway job)
+  # Simulated llama-cpp targets (stub; llama metrics come from llm-gateway job)
   - job_name: "llama-cpp"
     static_configs:
       - targets: ["exporter:9201"]
         labels: {instance: "10.208.211.62:8080"}
       - targets: ["exporter:9202"]
-        labels: {instance: "10.208.211.54:8080"}
+        labels: {instance: "10.208.211.52:8080"}
       - targets: ["exporter:9203"]
-        labels: {instance: "10.208.211.59:8080"}
+        labels: {instance: "10.208.211.53:8080"}
       - targets: ["exporter:9204"]
+        labels: {instance: "10.208.211.54:8080"}
+      - targets: ["exporter:9205"]
+        labels: {instance: "10.208.211.55:8080"}
+      - targets: ["exporter:9206"]
+        labels: {instance: "10.208.211.56:8080"}
+      - targets: ["exporter:9207"]
+        labels: {instance: "10.208.211.57:8080"}
+      - targets: ["exporter:9208"]
+        labels: {instance: "10.208.211.58:8080"}
+      - targets: ["exporter:9209"]
+        labels: {instance: "10.208.211.59:8080"}
+      - targets: ["exporter:9210"]
+        labels: {instance: "10.208.211.60:8080"}
+      - targets: ["exporter:9211"]
+        labels: {instance: "10.208.211.61:8080"}
+      - targets: ["exporter:9212"]
+        labels: {instance: "10.208.211.63:8080"}
+      - targets: ["exporter:9213"]
         labels: {instance: "10.208.211.64:8080"}
+      - targets: ["exporter:9214"]
+        labels: {instance: "10.208.211.65:8080"}
+      - targets: ["exporter:9215"]
+        labels: {instance: "10.208.211.67:8080"}

@@ -4,19 +4,21 @@ from pathlib import Path
 
 from gateway.config import settings
 
-_MULTIMODAL_NODE_IP = settings.multimodal_node_ip
+_MULTIMODAL_NODE_IPS: set[str] = {
+    ip.strip() for ip in settings.multimodal_node_ips.split(",") if ip.strip()
+}
 
 
 class LlamaServerProcess:
     """Manages a local llama-server subprocess.
 
-    Selects model/port/flags based on whether this node is the multimodal
-    node (WS-13 / Qwen3-VL) or a text node (WS-11/03/08 / Gemma 4 26B QAT).
+    Selects model/port/flags based on whether this node is a multimodal
+    node (Qwen3-VL) or a text node (Gemma 4 26B QAT).
     """
 
     def __init__(self, host: str, port: int | None = None) -> None:
         self.host = host
-        self._is_multimodal = (host == _MULTIMODAL_NODE_IP)
+        self._is_multimodal = host in _MULTIMODAL_NODE_IPS
         if port is not None:
             self.port = port
         else:
@@ -31,10 +33,10 @@ class LlamaServerProcess:
                 "-m", settings.multimodal_llama_model_path,
                 "--mmproj", settings.multimodal_llama_mmproj_path,
                 "-ngl", str(settings.llama_ngl),
-                "-c", "32768",
+                "-c", str(settings.multimodal_llama_context),
                 "--host", self.host,
                 "--port", str(self.port),
-                "--parallel", str(settings.llama_parallel),
+                "--parallel", str(settings.multimodal_llama_parallel),
                 "--flash-attn", "auto",
                 "--cache-type-k", "q8_0",
                 "--cache-type-v", "q8_0",

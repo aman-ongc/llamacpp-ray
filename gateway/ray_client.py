@@ -1,4 +1,3 @@
-import itertools
 import os
 from collections.abc import AsyncIterator
 from typing import Any
@@ -24,30 +23,31 @@ def _transport() -> httpx.AsyncHTTPTransport:
 
 
 def _build_text_proxy_urls() -> list[str]:
-    """
-    Ray Serve HTTP proxies for text nodes (WS-11, WS-03, WS-08).
-    All on port 8001. Round-robin / affinity distributes across Gemma nodes.
-    """
+    """Per-node Ray Serve HTTP proxies for text nodes — used for affinity routing only."""
     serve_port = settings.ray_serve_url.split(":")[-1].rstrip("/")
     ips = [ip.strip() for ip in settings.text_node_ips.split(",") if ip.strip()]
     return [f"http://{ip}:{serve_port}" for ip in ips]
 
 
-def _build_multimodal_proxy_url() -> str:
-    """Single Ray Serve HTTP proxy for WS-13 (Qwen3-VL multimodal node)."""
+def _build_central_text_proxy_url() -> str:
+    """Single entry point for non-affinity text requests.
+
+    Sending all requests here lets Ray's internal load balancer dispatch to
+    whichever text replica is free, queuing when all are at max_ongoing_requests.
+    """
     serve_port = settings.ray_serve_url.split(":")[-1].rstrip("/")
-    return f"http://{settings.multimodal_node_ip}:{serve_port}"
+    return f"http://{settings.controller_node_ip}:{serve_port}"
+
+
+def _build_multimodal_proxy_url() -> str:
+    """Central Ray Serve proxy for multimodal pool (Ray dispatches to first free replica)."""
+    serve_port = settings.ray_serve_url.split(":")[-1].rstrip("/")
+    return f"http://{settings.controller_node_ip}:{serve_port}"
 
 
 _text_proxy_urls: list[str] = _build_text_proxy_urls()
+_central_text_proxy_url: str = _build_central_text_proxy_url()
 _multimodal_proxy_url: str = _build_multimodal_proxy_url()
-
-# Infinite round-robin over text nodes — GIL-safe for asyncio.
-_text_proxy_cycle = itertools.cycle(_text_proxy_urls)
-
-
-def _next_text_proxy_url() -> str:
-    return next(_text_proxy_cycle)
 
 
 def _affinity_text_proxy_url(key: str) -> str:
@@ -62,7 +62,8 @@ def _affinity_text_proxy_url(key: str) -> str:
 def _select_text_proxy_url(affinity_key: str | None) -> str:
     if affinity_key:
         return _affinity_text_proxy_url(affinity_key)
-    return _next_text_proxy_url()
+    # No affinity: use central proxy so Ray queues and dispatches to the first free replica.
+    return _central_text_proxy_url
 
 
 def _set_no_proxy() -> None:

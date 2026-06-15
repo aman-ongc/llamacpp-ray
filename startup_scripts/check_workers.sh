@@ -5,7 +5,7 @@ _ssh() {
   sshpass -p "$SSH_PASS" ssh -n -o StrictHostKeyChecking=no -o ConnectTimeout=5 "administrator@$host" "$@"
 }
 
-for node in 10.208.211.54 10.208.211.59 10.208.211.64; do
+for node in 10.208.211.52 10.208.211.53 10.208.211.54 10.208.211.55 10.208.211.56 10.208.211.57 10.208.211.58 10.208.211.59 10.208.211.60 10.208.211.61 10.208.211.63 10.208.211.64 10.208.211.65 10.208.211.67; do
   echo "=== $node ==="
   echo -n "  raylet:       "; _ssh "$node" "pgrep raylet && echo RUNNING || echo NOT_RUNNING" 2>&1
   echo -n "  llama-server: "; _ssh "$node" "pgrep llama-server && echo RUNNING || echo NOT_RUNNING" 2>&1

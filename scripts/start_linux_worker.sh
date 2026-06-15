@@ -11,11 +11,17 @@ VENV_PATH="${VENV_PATH:-/mnt/d/VirtualEnvironments/llm-platform}"
 LLAMA_SERVER="${LLAMA_SERVER:-/home/administrator/projects/local_llm/llama.cpp/build/bin/llama-server}"
 
 # ── Node type detection ────────────────────────────────────────────────────────
-# WS-13 (10.208.211.64) = multimodal node: Qwen3-VL-8B, port 8080, with mmproj
-# All other nodes      = text nodes: Gemma 4 26B QAT, port 8080, no mmproj
-MULTIMODAL_NODE_IP="10.208.211.64"
+# Multimodal nodes (.63/.64/.65/.67): Qwen3-VL-8B, --parallel 4, -c 16384
+# All other nodes: Gemma 4 26B QAT, --parallel 1, -c 65536
+MULTIMODAL_NODE_IPS=("10.208.211.63" "10.208.211.64" "10.208.211.65" "10.208.211.67")
 
-if [[ "$WORKER_HOST" == "$MULTIMODAL_NODE_IP" ]]; then
+is_multimodal() {
+    local ip="$1"
+    for mm in "${MULTIMODAL_NODE_IPS[@]}"; do [[ "$ip" == "$mm" ]] && return 0; done
+    return 1
+}
+
+if is_multimodal "$WORKER_HOST"; then
     NODE_TYPE="multimodal"
     LLAMA_PORT=8080
     MODEL_PATH="${MODEL_PATH:-/mnt/d/Models/qwen-3-vl/Qwen3VL-8B-Instruct-Q8_0.gguf}"
@@ -81,10 +87,10 @@ if ! curl --noproxy '*' -sf "http://$LLAMA_HOST:$LLAMA_PORT/health" >/dev/null 2
       -m "$MODEL_PATH" \
       --mmproj "$MMPROJ_PATH" \
       -ngl 999 \
-      -c 32768 \
+      -c 16384 \
       --host "$LLAMA_HOST" \
       --port "$LLAMA_PORT" \
-      --parallel 2 \
+      --parallel 4 \
       --flash-attn auto \
       --cache-type-k q8_0 \
       --cache-type-v q8_0 \

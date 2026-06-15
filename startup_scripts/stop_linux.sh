@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT_DIR="${PROJECT_DIR:-/home/administrator/projects/llm-inference-service}"
 VENV_DIR="${VENV_DIR:-/mnt/d/VirtualEnvironments/llm-platform}"
 SUDO_PASS="${SUDO_PASS:-Ongc@1234}"
-WORKERS="${WORKERS:-10.208.211.54 10.208.211.59 10.208.211.64}"
+WORKERS="${WORKERS:-10.208.211.52 10.208.211.53 10.208.211.54 10.208.211.55 10.208.211.56 10.208.211.57 10.208.211.58 10.208.211.59 10.208.211.60 10.208.211.61 10.208.211.63 10.208.211.64 10.208.211.65 10.208.211.67}"
 SSH_PASS="${SSH_PASS:-Ongc@1234}"
 
 export no_proxy="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in"

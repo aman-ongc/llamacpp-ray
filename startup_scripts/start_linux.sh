@@ -5,10 +5,9 @@
 # Idempotent — safe to run multiple times.
 #
 # Node layout:
-#   WS-11 (10.208.211.62) — Ray head + text worker, Gemma 4 26B QAT, port 8080
-#   WS-03 (10.208.211.54) — text worker, Gemma 4 26B QAT, port 8080
-#   WS-08 (10.208.211.59) — text worker, Gemma 4 26B QAT, port 8080
-#   WS-13 (10.208.211.64) — multimodal worker, Qwen3-VL-8B, port 8080
+#   WS-11  (10.208.211.62) — Ray head; text worker only if CONTROLLER_AS_WORKER=true
+#   Text   (10.208.211.52–.61) — 10 nodes, Gemma 4 26B QAT, --parallel 1, -c 65536
+#   Multi  (10.208.211.63/.64/.65/.67) — 4 nodes, Qwen3-VL-8B, --parallel 4, -c 16384
 # =============================================================================
 set -euo pipefail
 
@@ -24,13 +23,13 @@ PROJECT_DIR="/home/administrator/projects/llm-inference-service"
 VENV_DIR="/mnt/d/VirtualEnvironments/llm-platform"
 LLAMA_SERVER="/home/administrator/projects/local_llm/llama.cpp/build/bin/llama-server"
 
-# WS-11 (controller + text worker): Gemma 4 26B QAT, no mmproj
+# Controller (WS-11): Gemma 4 26B QAT; joins text pool only when CONTROLLER_AS_WORKER=true
 CONTROLLER_IP="10.208.211.62"
 TEXT_LLAMA_PORT=8080
 TEXT_MODEL="/mnt/d/Models/gemma-4-26b-qat/gemma-4-26B_q4_0-it.gguf"
 
-# WS-13 (multimodal worker): Qwen3-VL-8B with mmproj
-MULTIMODAL_NODE_IP="10.208.211.64"
+# Multimodal workers (.63/.64/.65/.67): Qwen3-VL-8B, -c 16384 --parallel 4
+MULTIMODAL_NODE_IPS=("10.208.211.63" "10.208.211.64" "10.208.211.65" "10.208.211.67")
 MULTIMODAL_LLAMA_PORT=8080
 MULTIMODAL_MODEL="/mnt/d/Models/qwen-3-vl/Qwen3VL-8B-Instruct-Q8_0.gguf"
 MULTIMODAL_MMPROJ="/mnt/d/Models/qwen-3-vl/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"
@@ -166,10 +165,12 @@ else
     info "WS-11 controller-as-worker disabled — skipping llama-server on WS-11"
 fi
 
-info "Starting remote worker nodes (WS-03, WS-08, WS-13) in parallel..."
-# WS-03 and WS-08: text nodes (Gemma, port 8080, text_node resource)
-# WS-13: multimodal node (Qwen3-VL, port 8080, multimodal_node resource)
-TEXT_WORKERS=("10.208.211.54" "10.208.211.59")
+info "Starting remote worker nodes (text pool .52–.61, multimodal pool .63/.64/.65/.67) in parallel..."
+TEXT_WORKERS=(
+    "10.208.211.52" "10.208.211.53" "10.208.211.54" "10.208.211.55"
+    "10.208.211.56" "10.208.211.57" "10.208.211.58" "10.208.211.59"
+    "10.208.211.60" "10.208.211.61"
+)
 for worker in "${TEXT_WORKERS[@]}"; do
     info "  Launching text worker ${worker}..."
     MODEL_PATH="$TEXT_MODEL" \
@@ -180,22 +181,28 @@ for worker in "${TEXT_WORKERS[@]}"; do
         > "/tmp/worker-${worker}.log" 2>&1 &
 done
 
-info "  Launching multimodal worker ${MULTIMODAL_NODE_IP}..."
-MODEL_PATH="$MULTIMODAL_MODEL" \
-MMPROJ_PATH="$MULTIMODAL_MMPROJ" \
-LLAMA_SERVER="$LLAMA_SERVER" \
-RAY_HEAD_IP="$CONTROLLER_IP" \
-bash "$PROJECT_DIR/scripts/start_linux_worker.sh" "$MULTIMODAL_NODE_IP" \
-    > "/tmp/worker-${MULTIMODAL_NODE_IP}.log" 2>&1 &
+for mm_ip in "${MULTIMODAL_NODE_IPS[@]}"; do
+    info "  Launching multimodal worker ${mm_ip}..."
+    MODEL_PATH="$MULTIMODAL_MODEL" \
+    MMPROJ_PATH="$MULTIMODAL_MMPROJ" \
+    LLAMA_SERVER="$LLAMA_SERVER" \
+    RAY_HEAD_IP="$CONTROLLER_IP" \
+    bash "$PROJECT_DIR/scripts/start_linux_worker.sh" "$mm_ip" \
+        > "/tmp/worker-${mm_ip}.log" 2>&1 &
+done
 
-info "Waiting for all 4 nodes to join cluster (up to 120s)..."
-for i in {1..24}; do
+# 14 workers + 1 head = 15 total Ray nodes
+EXPECTED_NODES=15
+[[ "$CONTROLLER_AS_WORKER" == "true" ]] && EXPECTED_NODES=15  # head already counted
+info "Waiting for ${EXPECTED_NODES} nodes to join cluster (up to 180s)..."
+for i in {1..36}; do
     node_count=$(ray status --address "${CONTROLLER_IP}:${RAY_PORT}" 2>/dev/null \
         | grep -cE "node_[0-9a-f]+" || true)
-    if [[ "$node_count" -ge 4 ]]; then
-        ok "All 4 nodes active: WS-11 (head+text) + WS-03 (text) + WS-08 (text) + WS-13 (multimodal)"
+    if [[ "$node_count" -ge "$EXPECTED_NODES" ]]; then
+        ok "All ${node_count} nodes active"
         break
     fi
+    info "  ${node_count}/${EXPECTED_NODES} nodes up (${i}/36)..."
     sleep 5
 done
 ray status --address "${CONTROLLER_IP}:${RAY_PORT}" || true
@@ -238,11 +245,11 @@ echo -e "  ${CYAN}Gateway direct${NC}  http://${CONTROLLER_IP}:18000"
 echo -e "  ${CYAN}Watchdog log${NC}    /tmp/llama-watchdog.log  (PID: $(cat /tmp/llama-watchdog.pid 2>/dev/null || echo 'not started'))"
 echo ""
 if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
-    echo -e "  ${CYAN}Text nodes${NC}      WS-11/03/08 → Gemma 4 26B QAT (port 8080)"
+    echo -e "  ${CYAN}Text nodes${NC}      .52–.62 (11 nodes) → Gemma 4 26B QAT --parallel 1"
 else
-    echo -e "  ${CYAN}Text nodes${NC}      WS-03/08 → Gemma 4 26B QAT (port 8080)  [WS-11 head-only]"
+    echo -e "  ${CYAN}Text nodes${NC}      .52–.61 (10 nodes) → Gemma 4 26B QAT --parallel 1  [WS-11 head-only]"
 fi
-echo -e "  ${CYAN}Multimodal${NC}      WS-13       → Qwen3-VL-8B     (port 8080)"
+echo -e "  ${CYAN}Multimodal${NC}      .63/.64/.65/.67 (4 nodes) → Qwen3-VL-8B --parallel 4 -c 16384"
 echo ""
 echo -e "  ${YELLOW}Manage users/keys:${NC}"
 echo -e "    curl --noproxy '*' http://${CONTROLLER_IP}:10080/admin/users -H 'X-Admin-Secret: changeme'"

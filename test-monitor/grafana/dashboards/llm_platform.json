@@ -4,169 +4,810 @@
   "schemaVersion": 38,
   "version": 2,
   "refresh": "10s",
-  "time": {"from": "now-1h", "to": "now"},
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "graphTooltip": 1,
   "panels": [
-
-    {"id":100,"title":"Platform Overview","type":"row","collapsed":false,
-     "gridPos":{"h":1,"w":24,"x":0,"y":0},"panels":[]},
-
-    {"id":1,"title":"Request Rate (req/min)","type":"stat",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":4,"w":6,"x":0,"y":1},
-     "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","textMode":"auto","orientation":"auto"},
-     "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"unit":"reqpm",
-       "thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":5},{"color":"red","value":20}]}}},
-     "targets":[{"refId":"A","expr":"sum(rate(llm_requests_total[5m])) * 60",
-       "datasource":{"type":"prometheus","uid":"prometheus"}}]},
-
-    {"id":2,"title":"P95 Latency","type":"stat",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":4,"w":6,"x":6,"y":1},
-     "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","textMode":"auto","orientation":"auto"},
-     "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"unit":"ms",
-       "thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":10000},{"color":"red","value":30000}]}}},
-     "targets":[{"refId":"A",
-       "expr":"histogram_quantile(0.95, sum(rate(llm_request_latency_ms_bucket[10m])) by (le))",
-       "datasource":{"type":"prometheus","uid":"prometheus"}}]},
-
-    {"id":3,"title":"Active Requests","type":"stat",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":4,"w":6,"x":12,"y":1},
-     "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","textMode":"auto","orientation":"auto"},
-     "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},
-       "thresholds":{"mode":"absolute","steps":[{"color":"green","value":null},{"color":"yellow","value":3},{"color":"red","value":7}]}}},
-     "targets":[{"refId":"A","expr":"llm_active_requests",
-       "datasource":{"type":"prometheus","uid":"prometheus"}}]},
-
-    {"id":4,"title":"Completion Tokens/sec","type":"stat",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":4,"w":6,"x":18,"y":1},
-     "options":{"reduceOptions":{"calcs":["lastNotNull"]},"colorMode":"background","textMode":"auto","orientation":"auto"},
-     "fieldConfig":{"defaults":{"color":{"mode":"thresholds"},"unit":"short",
-       "thresholds":{"mode":"absolute","steps":[{"color":"green","value":null}]}}},
-     "targets":[{"refId":"A","expr":"sum(rate(llm_completion_tokens_total[5m]))",
-       "datasource":{"type":"prometheus","uid":"prometheus"}}]},
-
-    {"id":5,"title":"Request Latency Percentiles","type":"timeseries",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":8,"w":12,"x":0,"y":5},
-     "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"bottom"}},
-     "fieldConfig":{"defaults":{"unit":"ms","custom":{"lineWidth":2,"fillOpacity":8}}},
-     "targets":[
-       {"refId":"A","expr":"histogram_quantile(0.50, sum(rate(llm_request_latency_ms_bucket[5m])) by (le))","legendFormat":"p50",
-        "datasource":{"type":"prometheus","uid":"prometheus"}},
-       {"refId":"B","expr":"histogram_quantile(0.95, sum(rate(llm_request_latency_ms_bucket[5m])) by (le))","legendFormat":"p95",
-        "datasource":{"type":"prometheus","uid":"prometheus"}},
-       {"refId":"C","expr":"histogram_quantile(0.99, sum(rate(llm_request_latency_ms_bucket[5m])) by (le))","legendFormat":"p99",
-        "datasource":{"type":"prometheus","uid":"prometheus"}}
-     ]},
-
-    {"id":6,"title":"Request Rate by Status","type":"timeseries",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":8,"w":12,"x":12,"y":5},
-     "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"bottom"}},
-     "fieldConfig":{"defaults":{"unit":"reqps","custom":{"lineWidth":2,"fillOpacity":8}}},
-     "targets":[
-       {"refId":"A","expr":"sum(rate(llm_requests_total{status_code=\"200\"}[5m]))","legendFormat":"200 OK",
-        "datasource":{"type":"prometheus","uid":"prometheus"}},
-       {"refId":"B","expr":"sum(rate(llm_requests_total{status_code=\"500\"}[5m]))","legendFormat":"500 Error",
-        "datasource":{"type":"prometheus","uid":"prometheus"}},
-       {"refId":"C","expr":"sum(rate(llm_requests_total{status_code=\"429\"}[5m]))","legendFormat":"429 Rate-limited",
-        "datasource":{"type":"prometheus","uid":"prometheus"}}
-     ]},
-
-    {"id":7,"title":"Token Throughput","type":"timeseries",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":8,"w":12,"x":0,"y":13},
-     "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"bottom"}},
-     "fieldConfig":{"defaults":{"unit":"short","custom":{"lineWidth":2,"fillOpacity":8}}},
-     "targets":[
-       {"refId":"A","expr":"sum(rate(llm_prompt_tokens_total[5m]))","legendFormat":"prompt tokens/s",
-        "datasource":{"type":"prometheus","uid":"prometheus"}},
-       {"refId":"B","expr":"sum(rate(llm_completion_tokens_total[5m]))","legendFormat":"completion tokens/s",
-        "datasource":{"type":"prometheus","uid":"prometheus"}}
-     ]},
-
-    {"id":8,"title":"Error Rate %","type":"timeseries",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":8,"w":12,"x":12,"y":13},
-     "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"bottom"}},
-     "fieldConfig":{"defaults":{"unit":"percent","min":0,"custom":{"lineWidth":2,"fillOpacity":10},
-       "color":{"fixedColor":"red","mode":"fixed"}}},
-     "targets":[{"refId":"A",
-       "expr":"100 * sum(rate(llm_requests_total{status_code=\"500\"}[5m])) / sum(rate(llm_requests_total[5m]))",
-       "legendFormat":"error %","datasource":{"type":"prometheus","uid":"prometheus"}}]},
-
-    {"id":200,"title":"Per-User Monitoring","type":"row","collapsed":false,
-     "gridPos":{"h":1,"w":24,"x":0,"y":21},"panels":[]},
-
-    {"id":9,"title":"Request Rate by User (real-time)","type":"timeseries",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":8,"w":12,"x":0,"y":22},
-     "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"right"}},
-     "fieldConfig":{"defaults":{"unit":"reqps","custom":{"lineWidth":2,"fillOpacity":5}}},
-     "targets":[{"refId":"A",
-       "expr":"sum by(username) (rate(llm_requests_total[5m]))",
-       "legendFormat":"{{username}}","datasource":{"type":"prometheus","uid":"prometheus"}}]},
-
-    {"id":10,"title":"Completion Tokens/sec by User","type":"timeseries",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":8,"w":12,"x":12,"y":22},
-     "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"right"}},
-     "fieldConfig":{"defaults":{"unit":"short","custom":{"lineWidth":2,"fillOpacity":5}}},
-     "targets":[{"refId":"A",
-       "expr":"sum by(username) (rate(llm_completion_tokens_total[5m]))",
-       "legendFormat":"{{username}}","datasource":{"type":"prometheus","uid":"prometheus"}}]},
-
-    {"id":11,"title":"P95 Latency by User","type":"timeseries",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":8,"w":12,"x":0,"y":30},
-     "options":{"tooltip":{"mode":"multi"},"legend":{"displayMode":"list","placement":"right"}},
-     "fieldConfig":{"defaults":{"unit":"ms","custom":{"lineWidth":2,"fillOpacity":5}}},
-     "targets":[{"refId":"A",
-       "expr":"histogram_quantile(0.95, sum by(le, username) (rate(llm_request_latency_ms_bucket[5m])))",
-       "legendFormat":"{{username}}","datasource":{"type":"prometheus","uid":"prometheus"}}]},
-
-    {"id":12,"title":"Total Tokens Consumed by User (session)","type":"barchart",
-     "datasource":{"type":"prometheus","uid":"prometheus"},
-     "gridPos":{"h":8,"w":12,"x":12,"y":30},
-     "options":{"xField":"username","orientation":"horizontal","legend":{"displayMode":"hidden"},"barMaxWidth":30},
-     "fieldConfig":{"defaults":{"color":{"mode":"palette-classic"},"custom":{"fillOpacity":80}}},
-     "targets":[{"refId":"A",
-       "expr":"sort_desc(sum by(username) (increase(llm_completion_tokens_total[1h])))",
-       "legendFormat":"{{username}}","instant":true,
-       "datasource":{"type":"prometheus","uid":"prometheus"}}]},
-
-    {"id":300,"title":"Historical Usage — Database","type":"row","collapsed":false,
-     "gridPos":{"h":1,"w":24,"x":0,"y":38},"panels":[]},
-
-    {"id":13,"title":"Usage by User and API Key (DB)","type":"table",
-     "datasource":{"type":"postgres","uid":"llm-postgres"},
-     "gridPos":{"h":8,"w":24,"x":0,"y":39},
-     "options":{"footer":{"show":false}},
-     "fieldConfig":{"defaults":{"custom":{"align":"auto","cellOptions":{"type":"auto"},"filterable":true}}},
-     "targets":[{"refId":"A","format":"table",
-       "rawSql":"SELECT CASE WHEN ak.label IS NULL OR ak.label='' OR ak.label='default' THEN 'admin' ELSE ak.label END AS name, COALESCE(r.api_key_prefix,'unknown') AS api_key_prefix, COUNT(*) AS requests, COALESCE(SUM(r.prompt_tokens),0) AS prompt_tokens, COALESCE(SUM(r.completion_tokens),0) AS completion_tokens, COALESCE(SUM(r.prompt_tokens+r.completion_tokens),0) AS total_tokens, ROUND(AVG(r.latency_ms)::numeric,0) AS avg_latency_ms, MAX(r.created_at) AS last_request_at FROM request_logs r LEFT JOIN users u ON r.user_id=u.id LEFT JOIN api_keys ak ON r.api_key_prefix=ak.key_prefix WHERE $__timeFilter(r.created_at) GROUP BY ak.label, r.api_key_prefix ORDER BY requests DESC LIMIT 50",
-       "datasource":{"type":"postgres","uid":"llm-postgres"}}]},
-
-    {"id":14,"title":"Requests by Node (DB)","type":"barchart",
-     "datasource":{"type":"postgres","uid":"llm-postgres"},
-     "gridPos":{"h":8,"w":12,"x":0,"y":47},
-     "options":{"xField":"node_ip","orientation":"horizontal","legend":{"displayMode":"hidden"}},
-     "fieldConfig":{"defaults":{"color":{"mode":"palette-classic"},"custom":{"fillOpacity":80}}},
-     "targets":[{"refId":"A","format":"table",
-       "rawSql":"SELECT COALESCE(node_ip,'unknown') AS node_ip, COUNT(*) AS requests FROM request_logs WHERE $__timeFilter(created_at) GROUP BY node_ip ORDER BY requests DESC",
-       "datasource":{"type":"postgres","uid":"llm-postgres"}}]},
-
-    {"id":15,"title":"Recent Errors (DB)","type":"table",
-     "datasource":{"type":"postgres","uid":"llm-postgres"},
-     "gridPos":{"h":8,"w":12,"x":12,"y":47},
-     "options":{"footer":{"show":false}},
-     "fieldConfig":{"defaults":{"custom":{"align":"auto","cellOptions":{"type":"auto"}}}},
-     "targets":[{"refId":"A","format":"table",
-       "rawSql":"SELECT r.created_at, CASE WHEN ak.label IS NULL OR ak.label='' OR ak.label='default' THEN 'admin' ELSE ak.label END AS name, r.node_ip, r.status_code, r.latency_ms, r.error_message FROM request_logs r LEFT JOIN users u ON r.user_id=u.id LEFT JOIN api_keys ak ON r.api_key_prefix=ak.key_prefix WHERE r.status_code!=200 AND $__timeFilter(r.created_at) ORDER BY r.created_at DESC LIMIT 30",
-       "datasource":{"type":"postgres","uid":"llm-postgres"}}]}
-
+    {
+      "id": 100,
+      "title": "Platform Overview",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 1,
+      "title": "Request Rate (req/min)",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "reqpm",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(llm_requests_total[5m])) * 60",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "P95 Latency",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "ms",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10000
+              },
+              {
+                "color": "red",
+                "value": 30000
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(llm_request_latency_ms_bucket[10m])) by (le))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Active Requests",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 7
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llm_active_requests",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Completion Tokens/sec",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background",
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(llm_completion_tokens_total[5m]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Request Latency Percentiles",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.50, sum(rate(llm_request_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum(rate(llm_request_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "histogram_quantile(0.99, sum(rate(llm_request_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "p99",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Request Rate by Status",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(llm_requests_total{status_code=\"200\"}[5m]))",
+          "legendFormat": "200 OK",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(llm_requests_total{status_code=\"500\"}[5m]))",
+          "legendFormat": "500 Error",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "C",
+          "expr": "sum(rate(llm_requests_total{status_code=\"429\"}[5m]))",
+          "legendFormat": "429 Rate-limited",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Token Throughput",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(llm_prompt_tokens_total[5m]))",
+          "legendFormat": "prompt tokens/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(llm_completion_tokens_total[5m]))",
+          "legendFormat": "completion tokens/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Error Rate %",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "color": {
+            "fixedColor": "red",
+            "mode": "fixed"
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * sum(rate(llm_requests_total{status_code=\"500\"}[5m])) / sum(rate(llm_requests_total[5m]))",
+          "legendFormat": "error %",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 200,
+      "title": "Per-User Monitoring",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "panels": []
+    },
+    {
+      "id": 9,
+      "title": "Request Rate by User (real-time)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "right"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 5
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(username) (rate(llm_requests_total[5m]))",
+          "legendFormat": "{{username}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Completion Tokens/sec by User",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "right"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 5
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(username) (rate(llm_completion_tokens_total[5m]))",
+          "legendFormat": "{{username}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "P95 Latency by User",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "right"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 5
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by(le, username) (rate(llm_request_latency_ms_bucket[5m])))",
+          "legendFormat": "{{username}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Total Tokens Consumed by User (session)",
+      "type": "barchart",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "options": {
+        "xField": "username",
+        "orientation": "horizontal",
+        "legend": {
+          "displayMode": "hidden"
+        },
+        "barMaxWidth": 30
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sort_desc(sum by(username) (increase(llm_completion_tokens_total[1h])))",
+          "legendFormat": "{{username}}",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 300,
+      "title": "Historical Usage \u2014 Database",
+      "type": "row",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "panels": []
+    },
+    {
+      "id": 13,
+      "title": "Usage by User and API Key (DB)",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "llm-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "options": {
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT CASE WHEN ak.label IS NULL OR ak.label='' OR ak.label='default' THEN 'admin' ELSE ak.label END AS name, COALESCE(r.api_key_prefix,'unknown') AS api_key_prefix, COUNT(*) AS requests, COALESCE(SUM(r.prompt_tokens),0) AS prompt_tokens, COALESCE(SUM(r.completion_tokens),0) AS completion_tokens, COALESCE(SUM(r.prompt_tokens+r.completion_tokens),0) AS total_tokens, ROUND(AVG(r.latency_ms)::numeric,0) AS avg_latency_ms, MAX(r.created_at) AS last_request_at FROM request_logs r LEFT JOIN users u ON r.user_id=u.id LEFT JOIN api_keys ak ON r.api_key_prefix=ak.key_prefix WHERE $__timeFilter(r.created_at) GROUP BY ak.label, r.api_key_prefix ORDER BY requests DESC LIMIT 50",
+          "datasource": {
+            "type": "postgres",
+            "uid": "llm-postgres"
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Requests by Node (DB)",
+      "type": "barchart",
+      "datasource": {
+        "type": "postgres",
+        "uid": "llm-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 47
+      },
+      "options": {
+        "xField": "node_ip",
+        "orientation": "horizontal",
+        "legend": {
+          "displayMode": "hidden"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 80
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(node_ip,'unknown') AS node_ip, COUNT(*) AS requests FROM request_logs WHERE $__timeFilter(created_at) GROUP BY node_ip ORDER BY requests DESC",
+          "datasource": {
+            "type": "postgres",
+            "uid": "llm-postgres"
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "Recent Errors (DB)",
+      "type": "table",
+      "datasource": {
+        "type": "postgres",
+        "uid": "llm-postgres"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 47
+      },
+      "options": {
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT r.created_at, CASE WHEN ak.label IS NULL OR ak.label='' OR ak.label='default' THEN 'admin' ELSE ak.label END AS name, r.node_ip, r.status_code, r.latency_ms, r.error_message FROM request_logs r LEFT JOIN users u ON r.user_id=u.id LEFT JOIN api_keys ak ON r.api_key_prefix=ak.key_prefix WHERE r.status_code!=200 AND $__timeFilter(r.created_at) ORDER BY r.created_at DESC LIMIT 30",
+          "datasource": {
+            "type": "postgres",
+            "uid": "llm-postgres"
+          }
+        }
+      ]
+    }
   ]
 }

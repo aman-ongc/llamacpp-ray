@@ -158,7 +158,7 @@ async def chat_completions(
                 user=user,
                 api_key_prefix=api_key_prefix,
                 model=_MODEL_ALIAS,
-                node_ip=settings.multimodal_node_ip if multimodal else settings.controller_node_ip,
+                node_ip="multimodal" if multimodal else settings.controller_node_ip,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=0,
                 latency_ms=latency_ms,
@@ -170,7 +170,7 @@ async def chat_completions(
                 request_preview=_build_request_preview(payload.messages),
                 response_preview="[streaming]",
             )
-            node_ip_label = settings.multimodal_node_ip if multimodal else "stream"
+            node_ip_label = "multimodal" if multimodal else "stream"
             REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="true", username=user.username, node_ip=node_ip_label).inc()
             REQUEST_LATENCY_MS.labels(model=_MODEL_ALIAS, username=user.username, node_ip=node_ip_label).observe(latency_ms)
             PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(prompt_tokens)
@@ -220,7 +220,7 @@ async def chat_completions(
             user=user,
             api_key_prefix=api_key_prefix,
             model=_MODEL_ALIAS,
-            node_ip=settings.multimodal_node_ip if multimodal else None,
+            node_ip="multimodal" if multimodal else None,
             prompt_tokens=_estimate_prompt_tokens(payload.messages),
             completion_tokens=0,
             latency_ms=latency_ms,

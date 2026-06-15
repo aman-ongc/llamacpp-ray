@@ -2,14 +2,15 @@
 """
 Deploy TextWorker and MultimodalWorker as separate Ray Serve applications.
 
-- TextWorker  (route /text)       — 3 replicas pinned to text nodes (WS-11/03/08)
+- TextWorker  (route /text)       — 10 replicas across .52–.61 (WS-11/.62 excluded
+                                    unless CONTROLLER_AS_WORKER=true)
                                     proxies to Gemma 4 26B QAT on port 8080
-- MultimodalWorker (route /multi) — 1 replica pinned to WS-13
-                                    proxies to Qwen3-VL-8B on port 8080
+- MultimodalWorker (route /multi) — 4 replicas across .63/.64/.65/.67
+                                    proxies to Qwen3-VL-8B on port 8080 (-c 16384 --parallel 4)
 
 Node pinning uses custom Ray resources:
-  text nodes  : ray start --resources='{"text_node": 1}'
-  WS-13       : ray start --resources='{"multimodal_node": 1}'
+  text nodes       : ray start --resources='{"text_node": 1}'
+  multimodal nodes : ray start --resources='{"multimodal_node": 1}'
 
 Run from /home/administrator/projects/llm-inference-service or wherever
 the gateway package is importable.
@@ -43,13 +44,13 @@ serve.start(
     http_options={"host": SERVE_HOST, "port": SERVE_PORT, "location": "EveryNode"},
 )
 
-# Text workers — pinned to WS-11/03/08 via "text_node" resource
+# Text workers — pinned to text nodes via "text_node" resource
 serve.run(TextWorker.bind(), name="text-worker", route_prefix="/text")
 print("TextWorker deployment complete (route: /text).", flush=True)
 
-# Multimodal worker — pinned to WS-13 via "multimodal_node" resource
+# Multimodal workers — pinned to multimodal nodes via "multimodal_node" resource
 serve.run(MultimodalWorker.bind(), name="multimodal-worker", route_prefix="/multimodal")
 print("MultimodalWorker deployment complete (route: /multimodal).", flush=True)
 
 print(f"Text endpoint:       http://10.208.211.62:{SERVE_PORT}/text/v1/chat/completions", flush=True)
-print(f"Multimodal endpoint: http://10.208.211.64:{SERVE_PORT}/multimodal/v1/chat/completions", flush=True)
+print(f"Multimodal endpoint: http://10.208.211.62:{SERVE_PORT}/multimodal/v1/chat/completions", flush=True)
