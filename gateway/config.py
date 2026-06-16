@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     # ── Shared llama.cpp settings ─────────────────────────────────────────────
     llama_context: int = 65536
     llama_parallel: int = 1
-    multimodal_llama_context: int = 65536
-    multimodal_llama_parallel: int = 8
+    multimodal_llama_context: int = 32768
+    multimodal_llama_parallel: int = 6
     llama_ngl: int = 999
 
     request_timeout_seconds: float = 1800.0

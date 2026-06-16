@@ -42,6 +42,7 @@ fi
 
 nohup "$INSTALL_DIR/${BINARY_NAME}" \
   --web.listen-address=":${PORT}" \
+  --nvidia-smi-command="timeout 10 /usr/lib/wsl/lib/nvidia-smi" \
   >/tmp/nvidia_gpu_exporter.log 2>&1 </dev/null &
 
 LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
