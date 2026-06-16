@@ -11,87 +11,92 @@ TOTAL_REQUESTS=300
 REQUESTS_PER_MINUTE=60
 TEST_MINUTES=5
 
+# 8x8 red/blue checkerboard PNG, fixed test image
+TEST_IMAGE_B64="iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAF0lEQVQI12P4zwAE/zFJ7KL/oVKDTgcA6TA/wc/OKqsAAAAASUVORK5CYII="
+
 echo "req_id,http_code,latency_sec" > "${RESULTS_FILE}"
 
 send_request() {
+    local REQ_ID=$1
 
-```
-local REQ_ID=$1
+    WORDS=$((10 + RANDOM % 91))
+    PROMPT=$(yes "describe this image" | head -n "${WORDS}" | tr '\n' ' ')
 
-WORDS=$((10 + RANDOM % 91))
+    RESULT=$(curl \
+        --noproxy '*' \
+        -s \
+        -o /tmp/resp_${REQ_ID}.json \
+        -w "%{http_code},%{time_total}" \
+        "${ENDPOINT}" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${API_KEY}" \
+        -d "{
+            \"model\": \"ongc-llm\",
+            \"messages\": [
+                {
+                    \"role\": \"user\",
+                    \"content\": [
+                        {
+                            \"type\": \"image_url\",
+                            \"image_url\": {
+                                \"url\": \"data:image/png;base64,${TEST_IMAGE_B64}\"
+                            }
+                        },
+                        {
+                            \"type\": \"text\",
+                            \"text\": \"${PROMPT}\"
+                        }
+                    ]
+                }
+            ],
+            \"max_tokens\": 100
+        }")
 
-PROMPT=$(yes "hello" | head -n "${WORDS}" | tr '\n' ' ')
+    HTTP_CODE=$(echo "${RESULT}" | cut -d',' -f1)
+    LATENCY=$(echo "${RESULT}" | cut -d',' -f2)
 
-RESULT=$(curl \
-    --noproxy '*' \
-    -s \
-    -o /tmp/resp_${REQ_ID}.json \
-    -w "%{http_code},%{time_total}" \
-    "${ENDPOINT}" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer ${API_KEY}" \
-    -d "{
-        \"model\":\"ongc-llm\",
-        \"messages\":[
-            {
-                \"role\":\"user\",
-                \"content\":\"${PROMPT}\"
-            }
-        ],
-        \"max_tokens\":100
-    }")
+    echo "${REQ_ID},${HTTP_CODE},${LATENCY}" >> "${RESULTS_FILE}"
 
-HTTP_CODE=$(echo "${RESULT}" | cut -d',' -f1)
-LATENCY=$(echo "${RESULT}" | cut -d',' -f2)
-
-echo "${REQ_ID},${HTTP_CODE},${LATENCY}" >> "${RESULTS_FILE}"
-
-echo "$(date '+%H:%M:%S') REQ=${REQ_ID} HTTP=${HTTP_CODE} LAT=${LATENCY}s"
-```
-
+    echo "$(date '+%H:%M:%S') REQ=${REQ_ID} HTTP=${HTTP_CODE} LAT=${LATENCY}s"
 }
 
 REQ_ID=1
 
 echo
 echo "===================================================="
-echo "Starting rate-aware stress test"
+echo "Starting multimodal image stress test"
 echo "Rate limit      : ${REQUESTS_PER_MINUTE}/minute"
 echo "Duration        : ${TEST_MINUTES} minutes"
 echo "Total requests  : ${TOTAL_REQUESTS}"
+echo "Image           : 8x8 checkerboard PNG (base64 inline)"
 echo "===================================================="
 echo
 
-for MINUTE in $(seq 1 ${TEST_MINUTES})
-do
+for MINUTE in $(seq 1 ${TEST_MINUTES}); do
 
-```
-echo
-echo "================ Minute ${MINUTE}/${TEST_MINUTES} ================"
+    echo
+    echo "================ Minute ${MINUTE}/${TEST_MINUTES} ================"
 
-MINUTE_START=$(date +%s)
+    MINUTE_START=$(date +%s)
 
-for SLOT in $(seq 1 12)
-do
+    for SLOT in $(seq 1 12); do
 
-    echo "Batch ${SLOT}/12"
+        echo "Batch ${SLOT}/12"
 
-    for i in $(seq 1 5)
-    do
-        send_request "${REQ_ID}" &
-        REQ_ID=$((REQ_ID + 1))
+        for i in $(seq 1 5); do
+            send_request "${REQ_ID}" &
+            REQ_ID=$((REQ_ID + 1))
+        done
+
+        wait
+
+        sleep 5
     done
 
-    wait
+    MINUTE_END=$(date +%s)
+    ELAPSED=$((MINUTE_END - MINUTE_START))
 
-    sleep 5
-done
-
-MINUTE_END=$(date +%s)
-ELAPSED=$((MINUTE_END - MINUTE_START))
-
-echo "Minute runtime: ${ELAPSED}s"
-```
+    echo "Minute runtime: ${ELAPSED}s"
 
 done
 
