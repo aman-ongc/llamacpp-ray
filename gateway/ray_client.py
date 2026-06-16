@@ -45,18 +45,35 @@ def _build_multimodal_proxy_url() -> str:
     return f"http://{settings.controller_node_ip}:{serve_port}"
 
 
+_text_node_ips: list[str] = [ip.strip() for ip in settings.text_node_ips.split(",") if ip.strip()]
 _text_proxy_urls: list[str] = _build_text_proxy_urls()
 _central_text_proxy_url: str = _build_central_text_proxy_url()
 _multimodal_proxy_url: str = _build_multimodal_proxy_url()
+
+_serve_port: str = settings.ray_serve_url.split(":")[-1].rstrip("/")
 
 
 def _affinity_text_proxy_url(key: str) -> str:
     """Deterministic proxy URL for a given affinity key.
 
-    Same API key prefix always maps to the same Gemma node so llama.cpp
-    can reuse its KV cache across consecutive requests from that user.
+    Preferred node: hash(key) % total nodes.
+    If that node is currently unhealthy, fall back to the same hash applied
+    against only the healthy subset — stable routing within the surviving pool.
+    If no healthy nodes are known, fall through to the central Ray proxy so
+    Ray's own load balancer can try.
     """
-    return _text_proxy_urls[hash(key) % len(_text_proxy_urls)]
+    from gateway.health_monitor import healthy_text_nodes  # avoid circular import at module load
+
+    preferred_ip = _text_node_ips[hash(key) % len(_text_node_ips)]
+    if preferred_ip in healthy_text_nodes:
+        return f"http://{preferred_ip}:{_serve_port}"
+
+    healthy = [ip for ip in _text_node_ips if ip in healthy_text_nodes]
+    if healthy:
+        return f"http://{healthy[hash(key) % len(healthy)]}:{_serve_port}"
+
+    # Zero healthy nodes known — let Ray central proxy decide.
+    return _central_text_proxy_url
 
 
 def _select_text_proxy_url(affinity_key: str | None) -> str:

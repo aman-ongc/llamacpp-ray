@@ -24,7 +24,7 @@ NODES=(
     "10.208.211.56|text|8080"
     "10.208.211.57|text|8080"
     "10.208.211.58|text|8080"
-    "10.208.211.59|text|8080"
+    # .59 excluded — display GPU (15,352 MiB VRAM vs 16,376 MiB on headless nodes; OOMs frequently)
     "10.208.211.60|text|8080"
     "10.208.211.61|text|8080"
     "10.208.211.63|multimodal|8080"
@@ -57,7 +57,7 @@ remote_exec() {
 
 restart_text_node() {
     local ip="$1"
-    local cmd="pkill -f llama-server || true; sleep 2; nohup ${LLAMA_SERVER} \
+    local cmd="pkill llama-server || true; sleep 2; nohup ${LLAMA_SERVER} \
         -m ${TEXT_MODEL} \
         -ngl 999 -c 65536 \
         --host ${ip} --port 8080 \
@@ -68,14 +68,16 @@ restart_text_node() {
     if [[ "$ip" == "$CONTROLLER_IP" ]]; then
         eval "$cmd"
     else
-        remote_exec "$ip" bash -c "$cmd"
+        # printf %q properly shell-quotes $cmd so the remote /bin/sh passes the
+        # entire string as a single argument to bash -c (prevents pkill losing its
+        # pattern when SSH concatenates bare arguments).
+        remote_exec "$ip" "$(printf 'bash -c %q' "$cmd")"
     fi
 }
 
 restart_multimodal_node() {
     local ip="$1"
-    remote_exec "$ip" bash -c "pkill -f llama-server || true; sleep 2; \
-        nohup ${LLAMA_SERVER} \
+    local cmd="pkill llama-server || true; sleep 2; nohup ${LLAMA_SERVER} \
         -m ${MULTIMODAL_MODEL} \
         --mmproj ${MULTIMODAL_MMPROJ} \
         -ngl 999 -c 65536 \
@@ -84,6 +86,7 @@ restart_multimodal_node() {
         --flash-attn auto --cache-type-k q8_0 --cache-type-v q8_0 \
         --cont-batching --metrics \
         >/tmp/llama-server.log 2>&1 </dev/null &"
+    remote_exec "$ip" "$(printf 'bash -c %q' "$cmd")"
 }
 
 wait_for_health() {
@@ -119,15 +122,16 @@ check_and_restart() {
     fi
 }
 
-log "Watchdog started. Monitoring ${#NODES[@]} nodes every ${POLL_INTERVAL}s."
-# NOTE: node checks are sequential. If a node triggers a recovery wait (up to
-# RESTART_WAIT=120s), checks on subsequent nodes are delayed for that duration.
-# With 14 nodes, worst-case gap between checks on the last node is ~1680s.
-# In practice recovery is rare; healthy nodes return in <1s each.
+log "Watchdog started. Monitoring ${#NODES[@]} nodes every ${POLL_INTERVAL}s (parallel checks)."
+# All node checks run as background subshells in parallel.
+# Worst-case cycle time is max(single node restart wait) = RESTART_WAIT = 120s
+# instead of sum(all waits). Log lines from concurrent restarts may interleave
+# but each line includes the node IP so they remain readable.
 while true; do
     for node in "${NODES[@]}"; do
         IFS='|' read -r ip type port <<< "$node"
-        check_and_restart "$ip" "$type" "$port"
+        check_and_restart "$ip" "$type" "$port" &
     done
+    wait   # wait for all parallel checks before sleeping
     sleep "$POLL_INTERVAL"
 done

@@ -18,10 +18,11 @@ class Settings(BaseSettings):
     default_model: str = "ongc-llm"
 
     # ── Text pool: .52–.61 + .62 (WS-11, excluded unless controller_as_worker=true)
-    #              .54 (WS-3, excluded unless docling_node_as_worker=true) ──────────
+    #              .54 (WS-3, excluded unless docling_node_as_worker=true)
+    #              .59 permanently excluded — display GPU (15,352 MiB vs 16,376 MiB on headless nodes)
     text_node_ips: str = Field(
         default="10.208.211.52,10.208.211.53,10.208.211.54,10.208.211.55,"
-                "10.208.211.56,10.208.211.57,10.208.211.58,10.208.211.59,"
+                "10.208.211.56,10.208.211.57,10.208.211.58,"
                 "10.208.211.60,10.208.211.61,10.208.211.62"
     )
     text_llama_port: int = 8080
@@ -41,7 +42,7 @@ class Settings(BaseSettings):
     llama_context: int = 65536
     llama_parallel: int = 1
     multimodal_llama_context: int = 32768
-    multimodal_llama_parallel: int = 6
+    multimodal_llama_parallel: int = 4
     llama_ngl: int = 999
 
     request_timeout_seconds: float = 1800.0
@@ -52,7 +53,7 @@ class Settings(BaseSettings):
     # All worker node IPs (excluding controller) — used by admin/infra tooling.
     worker_node_ips: str = Field(
         default="10.208.211.52,10.208.211.53,10.208.211.54,10.208.211.55,"
-                "10.208.211.56,10.208.211.57,10.208.211.58,10.208.211.59,"
+                "10.208.211.56,10.208.211.57,10.208.211.58,"
                 "10.208.211.60,10.208.211.61,"
                 "10.208.211.63,10.208.211.64,10.208.211.65,10.208.211.67"
     )

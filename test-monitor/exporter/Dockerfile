@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --proxy http://10.205.122.201:8080 -r requirements.txt
 COPY exporter.py .
 CMD ["python", "exporter.py"]

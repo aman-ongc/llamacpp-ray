@@ -81,7 +81,7 @@ REQUEST_COUNT = Counter(
 )
 REQUEST_LATENCY = Histogram(
     "llm_request_latency_ms", "Request latency ms", ["model", "username", "node_ip"],
-    buckets=(50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000),
+    buckets=(50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000, 120000, 180000, 300000, 600000),
 )
 PROMPT_TOKENS     = Counter("llm_prompt_tokens_total",     "Prompt tokens",              ["model", "username", "request_type"])
 COMPLETION_TOKENS = Counter("llm_completion_tokens_total", "Completion tokens",           ["model", "username", "request_type"])

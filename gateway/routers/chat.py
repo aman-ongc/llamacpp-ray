@@ -1,16 +1,18 @@
 import json
+import logging
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
-from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import JSONResponse, StreamingResponse
 
 from gateway.auth.middleware import require_api_key
 from gateway.config import settings
-from gateway.database import get_db
+from gateway.database import AsyncSessionLocal
 from gateway.logging_.request_logger import log_request
 from gateway.metrics import (
     ACTIVE_REQUESTS,
@@ -124,7 +126,6 @@ async def chat_completions(
     payload: ChatCompletionRequest,
     request: Request,
     user: User = Depends(require_api_key),
-    session: AsyncSession = Depends(get_db),
 ):
     api_key_prefix = getattr(request.state, "api_key_prefix", None)
     multimodal = _is_multimodal_request(payload.messages)
@@ -145,38 +146,47 @@ async def chat_completions(
     ACTIVE_REQUESTS.inc()
     try:
         if payload.stream:
-            async def event_stream():
-                async for chunk in stream_inference(
-                    _payload_for_inference(payload), affinity_key, multimodal=multimodal
-                ):
-                    line = chunk.rstrip("\n")
-                    yield f"{_rewrite_sse_model(line)}\n\n"
-
-            response = StreamingResponse(event_stream(), media_type="text/event-stream")
-            latency_ms = int((time.perf_counter() - start) * 1000)
             prompt_tokens = _estimate_prompt_tokens(payload.messages)
-            await log_request(
-                session,
-                user=user,
-                api_key_prefix=api_key_prefix,
-                model=_MODEL_ALIAS,
-                node_ip="multimodal" if multimodal else settings.controller_node_ip,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=0,
-                latency_ms=latency_ms,
-                queue_ms=0,
-                status_code=200,
-                error_message=None,
-                streaming=True,
-                request_type=request_type,
-                request_preview=_build_request_preview(payload.messages),
-                response_preview="[streaming]",
-            )
             node_ip_label = "multimodal" if multimodal else "stream"
-            REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="true", username=user.username, node_ip=node_ip_label).inc()
-            REQUEST_LATENCY_MS.labels(model=_MODEL_ALIAS, username=user.username, node_ip=node_ip_label).observe(latency_ms)
-            PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(prompt_tokens)
-            return response
+
+            async def event_stream():
+                stream_error: Exception | None = None
+                try:
+                    async for chunk in stream_inference(
+                        _payload_for_inference(payload), affinity_key, multimodal=multimodal
+                    ):
+                        line = chunk.rstrip("\n")
+                        yield f"{_rewrite_sse_model(line)}\n\n"
+                except Exception as exc:
+                    stream_error = exc
+                    raise
+                finally:
+                    latency_ms = int((time.perf_counter() - start) * 1000)
+                    status_code = 500 if stream_error is not None else 200
+                    error_str = str(stream_error) if stream_error is not None else None
+                    async with AsyncSessionLocal() as session:
+                        await log_request(
+                            session,
+                            user=user,
+                            api_key_prefix=api_key_prefix,
+                            model=_MODEL_ALIAS,
+                            node_ip="multimodal" if multimodal else settings.controller_node_ip,
+                            prompt_tokens=prompt_tokens,
+                            completion_tokens=0,
+                            latency_ms=latency_ms,
+                            queue_ms=0,
+                            status_code=status_code,
+                            error_message=error_str,
+                            streaming=True,
+                            request_type=request_type,
+                            request_preview=_build_request_preview(payload.messages),
+                            response_preview="[streaming]" if stream_error is None else error_str,
+                        )
+                    REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code=str(status_code), streaming="true", username=user.username, node_ip=node_ip_label).inc()
+                    REQUEST_LATENCY_MS.labels(model=_MODEL_ALIAS, username=user.username, node_ip=node_ip_label).observe(latency_ms)
+                    PROMPT_TOKENS.labels(model=_MODEL_ALIAS, username=user.username, request_type=request_type).inc(prompt_tokens)
+
+            return StreamingResponse(event_stream(), media_type="text/event-stream")
 
         result = await submit_inference(
             _payload_for_inference(payload), affinity_key, multimodal=multimodal
@@ -190,23 +200,27 @@ async def chat_completions(
         queue_ms = int(result.get("queue_ms", 0))
         node_ip = result.get("node_ip", settings.controller_node_ip)
 
-        await log_request(
-            session,
-            user=user,
-            api_key_prefix=api_key_prefix,
-            model=_MODEL_ALIAS,
-            node_ip=node_ip,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            latency_ms=latency_ms,
-            queue_ms=queue_ms,
-            status_code=200,
-            error_message=None,
-            streaming=False,
-            request_type=request_type,
-            request_preview=_build_request_preview(payload.messages),
-            response_preview=_build_success_response_preview(result),
-        )
+        try:
+            async with AsyncSessionLocal() as session:
+                await log_request(
+                    session,
+                    user=user,
+                    api_key_prefix=api_key_prefix,
+                    model=_MODEL_ALIAS,
+                    node_ip=node_ip,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    latency_ms=latency_ms,
+                    queue_ms=queue_ms,
+                    status_code=200,
+                    error_message=None,
+                    streaming=False,
+                    request_type=request_type,
+                    request_preview=_build_request_preview(payload.messages),
+                    response_preview=_build_success_response_preview(result),
+                )
+        except Exception:
+            logger.exception("Failed to log successful inference for user=%s", user.username)
 
         REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="200", streaming="false", username=user.username, node_ip=node_ip).inc()
         REQUEST_LATENCY_MS.labels(model=_MODEL_ALIAS, username=user.username, node_ip=node_ip).observe(latency_ms)
@@ -217,43 +231,52 @@ async def chat_completions(
         latency_ms = int((time.perf_counter() - start) * 1000)
         error_str = json.dumps(exc.detail) if isinstance(exc.detail, (dict, list)) else str(exc.detail)
         REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code=str(exc.status_code), streaming="false", username=user.username, node_ip="unknown").inc()
-        await log_request(
-            session,
-            user=user,
-            api_key_prefix=api_key_prefix,
-            model=_MODEL_ALIAS,
-            node_ip="multimodal" if multimodal else None,
-            prompt_tokens=_estimate_prompt_tokens(payload.messages),
-            completion_tokens=0,
-            latency_ms=latency_ms,
-            queue_ms=0,
-            status_code=exc.status_code,
-            error_message=error_str,
-            streaming=payload.stream,
-            request_type=request_type,
-            request_preview=_build_request_preview(payload.messages, full=True),
-            response_preview=error_str,
-        )
+        try:
+            async with AsyncSessionLocal() as session:
+                await log_request(
+                    session,
+                    user=user,
+                    api_key_prefix=api_key_prefix,
+                    model=_MODEL_ALIAS,
+                    node_ip="multimodal" if multimodal else None,
+                    prompt_tokens=_estimate_prompt_tokens(payload.messages),
+                    completion_tokens=0,
+                    latency_ms=latency_ms,
+                    queue_ms=0,
+                    status_code=exc.status_code,
+                    error_message=error_str,
+                    streaming=payload.stream,
+                    request_type=request_type,
+                    request_preview=_build_request_preview(payload.messages, full=True),
+                    response_preview=error_str,
+                )
+        except Exception:
+            logger.exception("Failed to log HTTPException request (status=%d)", exc.status_code)
         raise
     except Exception as exc:
         latency_ms = int((time.perf_counter() - start) * 1000)
         REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code="500", streaming="false", username=user.username, node_ip="unknown").inc()
-        await log_request(
-            session,
-            user=user,
-            api_key_prefix=api_key_prefix,
-            model=_MODEL_ALIAS,
-            node_ip=None,
-            prompt_tokens=_estimate_prompt_tokens(payload.messages),
-            completion_tokens=0,
-            latency_ms=latency_ms,
-            queue_ms=0,
-            status_code=500,
-            error_message=str(exc),
-            streaming=payload.stream,
-            request_preview=_build_request_preview(payload.messages, full=True),
-            response_preview=str(exc),
-        )
+        try:
+            async with AsyncSessionLocal() as session:
+                await log_request(
+                    session,
+                    user=user,
+                    api_key_prefix=api_key_prefix,
+                    model=_MODEL_ALIAS,
+                    node_ip=None,
+                    prompt_tokens=_estimate_prompt_tokens(payload.messages),
+                    completion_tokens=0,
+                    latency_ms=latency_ms,
+                    queue_ms=0,
+                    status_code=500,
+                    error_message=str(exc),
+                    streaming=payload.stream,
+                    request_type=request_type,
+                    request_preview=_build_request_preview(payload.messages, full=True),
+                    response_preview=str(exc),
+                )
+        except Exception:
+            logger.exception("Failed to log inference exception: %s", exc)
         raise HTTPException(status_code=500, detail="Inference request failed") from exc
     finally:
         ACTIVE_REQUESTS.dec()

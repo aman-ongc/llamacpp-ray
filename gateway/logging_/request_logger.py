@@ -39,5 +39,4 @@ async def log_request(
     )
     session.add(entry)
     await session.commit()
-    await session.refresh(entry)
     return entry

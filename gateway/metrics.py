@@ -11,7 +11,7 @@ REQUEST_LATENCY_MS = Histogram(
     "llm_request_latency_ms",
     "Inference request latency in milliseconds",
     ["model", "username", "node_ip"],
-    buckets=(50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000),
+    buckets=(50, 100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000, 120000, 180000, 300000, 600000),
 )
 PROMPT_TOKENS = Counter(
     "llm_prompt_tokens_total",

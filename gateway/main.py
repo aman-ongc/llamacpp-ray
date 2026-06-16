@@ -1,7 +1,9 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from gateway.health_monitor import health_probe_loop
 from gateway.routers.admin import router as admin_router
 from gateway.routers.chat import router as chat_router
 from gateway.routers.completions import router as completions_router
@@ -12,7 +14,15 @@ from gateway.routers.models_router import router as models_router
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    yield
+    task = asyncio.create_task(health_probe_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="ONGC LLM Inference Gateway", lifespan=lifespan)

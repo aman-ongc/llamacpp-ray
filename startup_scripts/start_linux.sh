@@ -171,10 +171,11 @@ else
     info "WS-11 controller-as-worker disabled — skipping llama-server on WS-11"
 fi
 
-info "Starting remote worker nodes (text pool .52–.61, multimodal pool .63/.64/.65/.67) in parallel..."
+info "Starting remote worker nodes (text pool .52–.61 excl .59, multimodal pool .63/.64/.65/.67) in parallel..."
 TEXT_WORKERS=(
     "10.208.211.52" "10.208.211.53" "10.208.211.55"
-    "10.208.211.56" "10.208.211.57" "10.208.211.58" "10.208.211.59"
+    "10.208.211.56" "10.208.211.57" "10.208.211.58"
+    # .59 excluded — display GPU (15,352 MiB vs 16,376 MiB headless); OOMs frequently
     "10.208.211.60" "10.208.211.61"
 )
 # WS-3 (.54) joins text pool only when DOCLING_NODE_AS_WORKER=true.
