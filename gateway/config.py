@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     # Unified model name exposed to users — routing is transparent.
     default_model: str = "ongc-llm"
 
-    # ── Text pool: .52–.61 + .62 (WS-11, excluded unless controller_as_worker=true) ──
+    # ── Text pool: .52–.61 + .62 (WS-11, excluded unless controller_as_worker=true)
+    #              .54 (WS-3, excluded unless docling_node_as_worker=true) ──────────
     text_node_ips: str = Field(
         default="10.208.211.52,10.208.211.53,10.208.211.54,10.208.211.55,"
                 "10.208.211.56,10.208.211.57,10.208.211.58,10.208.211.59,"
@@ -40,7 +41,7 @@ class Settings(BaseSettings):
     llama_context: int = 65536
     llama_parallel: int = 1
     multimodal_llama_context: int = 65536
-    multimodal_llama_parallel: int = 4
+    multimodal_llama_parallel: int = 8
     llama_ngl: int = 999
 
     request_timeout_seconds: float = 1800.0
@@ -57,22 +58,33 @@ class Settings(BaseSettings):
     )
 
     # ── Controller-as-worker toggle ───────────────────────────────────────────
-    # When false (default): WS-11 (.62) is excluded from the text pool — 10 replicas active.
-    # When true: WS-11 joins the text pool — 11 replicas active.
+    # When false (default): WS-11 (.62) is excluded from the text pool — does not run llama-server.
+    # When true: WS-11 joins the text pool.
     # Set via env var: CONTROLLER_AS_WORKER=true
     controller_as_worker: bool = Field(default=False)
 
+    # ── Docling-node toggle ───────────────────────────────────────────────────
+    # WS-3 (.54) is reserved for docling/development workloads that need GPU VRAM.
+    # When false (default): .54 is excluded from the text pool — does not run llama-server.
+    # When true: .54 joins the text pool as a normal text worker.
+    # Set via env var: DOCLING_NODE_AS_WORKER=true
+    docling_node_ip: str = Field(default="10.208.211.54")
+    docling_node_as_worker: bool = Field(default=False)
+
     @model_validator(mode="after")
     def _apply_node_settings(self) -> "Settings":
-        # Exclude controller from text pool unless explicitly opted in.
+        excluded = set()
         if not self.controller_as_worker:
-            ips = [
-                ip.strip()
-                for ip in self.text_node_ips.split(",")
-                if ip.strip() and ip.strip() != self.controller_node_ip
-            ]
-            self.text_node_ips = ",".join(ips)
-            self.text_serve_replicas = len(ips)
+            excluded.add(self.controller_node_ip)
+        if not self.docling_node_as_worker:
+            excluded.add(self.docling_node_ip)
+        ips = [
+            ip.strip()
+            for ip in self.text_node_ips.split(",")
+            if ip.strip() and ip.strip() not in excluded
+        ]
+        self.text_node_ips = ",".join(ips)
+        self.text_serve_replicas = len(ips)
         # Derive multimodal replica count from the IP list.
         multimodal_ips = [ip.strip() for ip in self.multimodal_node_ips.split(",") if ip.strip()]
         self.multimodal_serve_replicas = len(multimodal_ips)

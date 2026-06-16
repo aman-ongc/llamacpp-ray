@@ -7,26 +7,29 @@
 
 ## Cluster Nodes
 
-| Node  | IP              | Role                        | Pool        |
-|-------|-----------------|-----------------------------|-------------|
-| WS-11 | 10.208.211.62   | Controller (text optional)  | text        |
-| —     | 10.208.211.52   | Text worker                 | text        |
-| —     | 10.208.211.53   | Text worker                 | text        |
-| —     | 10.208.211.54   | Text worker                 | text        |
-| —     | 10.208.211.55   | Text worker                 | text        |
-| —     | 10.208.211.56   | Text worker                 | text        |
-| —     | 10.208.211.57   | Text worker                 | text        |
-| —     | 10.208.211.58   | Text worker                 | text        |
-| —     | 10.208.211.59   | Text worker                 | text        |
-| —     | 10.208.211.60   | Text worker                 | text        |
-| —     | 10.208.211.61   | Text worker                 | text        |
-| —     | 10.208.211.63   | Multimodal worker           | multimodal  |
-| —     | 10.208.211.64   | Multimodal worker           | multimodal  |
-| —     | 10.208.211.65   | Multimodal worker           | multimodal  |
-| —     | 10.208.211.67   | Multimodal worker           | multimodal  |
+| Node  | IP              | Role                                  | Pool        |
+|-------|-----------------|---------------------------------------|-------------|
+| WS-11 | 10.208.211.62   | Controller (text optional)            | text        |
+| —     | 10.208.211.52   | Text worker                           | text        |
+| —     | 10.208.211.53   | Text worker                           | text        |
+| WS-3  | 10.208.211.54   | Docling/dev node (text optional)      | text        |
+| —     | 10.208.211.55   | Text worker                           | text        |
+| —     | 10.208.211.56   | Text worker                           | text        |
+| —     | 10.208.211.57   | Text worker                           | text        |
+| —     | 10.208.211.58   | Text worker                           | text        |
+| —     | 10.208.211.59   | Text worker                           | text        |
+| —     | 10.208.211.60   | Text worker                           | text        |
+| —     | 10.208.211.61   | Text worker                           | text        |
+| —     | 10.208.211.63   | Multimodal worker                     | multimodal  |
+| —     | 10.208.211.64   | Multimodal worker                     | multimodal  |
+| —     | 10.208.211.65   | Multimodal worker                     | multimodal  |
+| —     | 10.208.211.67   | Multimodal worker                     | multimodal  |
 
 WS-11 (.62) is excluded from the text pool by default (`CONTROLLER_AS_WORKER=false`).
 Set `CONTROLLER_AS_WORKER=true` to include it as an 11th text replica.
+
+WS-3 (.54) is reserved for docling/development workloads by default (`DOCLING_NODE_AS_WORKER=false`).
+Set `DOCLING_NODE_AS_WORKER=true` to include it as a text worker (only when GPU VRAM is not needed for other tasks).
 
 ---
 

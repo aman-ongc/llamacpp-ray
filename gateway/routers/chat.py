@@ -21,7 +21,7 @@ from gateway.metrics import (
     TOTAL_TOKENS,
 )
 from gateway.models import User
-from gateway.rate_limiter import check_rate_limit
+from gateway.rate_limiter import MULTIMODAL_RATE_LIMIT, TEXT_RATE_LIMIT, check_rate_limit
 from gateway.ray_client import stream_inference, submit_inference
 
 
@@ -127,14 +127,16 @@ async def chat_completions(
     session: AsyncSession = Depends(get_db),
 ):
     api_key_prefix = getattr(request.state, "api_key_prefix", None)
+    multimodal = _is_multimodal_request(payload.messages)
     try:
-        await check_rate_limit(user.id)
+        await check_rate_limit(
+            user.id,
+            limit=MULTIMODAL_RATE_LIMIT if multimodal else TEXT_RATE_LIMIT,
+        )
     except HTTPException:
         raise
     except RedisError:
         pass
-
-    multimodal = _is_multimodal_request(payload.messages)
     request_type = "multimodal" if multimodal else "text"
     # Affinity only applies to text pool (multimodal pool is a single node).
     affinity_key = api_key_prefix if (payload.session_affinity and not multimodal) else None

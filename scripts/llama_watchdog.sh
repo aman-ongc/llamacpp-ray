@@ -10,6 +10,9 @@ SSH_PASS="${SSH_PASS:-Ongc@1234}"
 LLAMA_SERVER="${LLAMA_SERVER:-/home/administrator/projects/local_llm/llama.cpp/build/bin/llama-server}"
 CONTROLLER_AS_WORKER="${CONTROLLER_AS_WORKER:-false}"
 CONTROLLER_IP="10.208.211.62"
+# WS-3 (.54): docling/dev node — excluded from watchdog unless DOCLING_NODE_AS_WORKER=true.
+DOCLING_NODE_AS_WORKER="${DOCLING_NODE_AS_WORKER:-false}"
+DOCLING_NODE_IP="10.208.211.54"
 
 # Node list: "ip|type|port"
 # text = Gemma 4 26B QAT (--parallel 1, -c 65536)
@@ -17,7 +20,6 @@ CONTROLLER_IP="10.208.211.62"
 NODES=(
     "10.208.211.52|text|8080"
     "10.208.211.53|text|8080"
-    "10.208.211.54|text|8080"
     "10.208.211.55|text|8080"
     "10.208.211.56|text|8080"
     "10.208.211.57|text|8080"
@@ -30,6 +32,9 @@ NODES=(
     "10.208.211.65|multimodal|8080"
     "10.208.211.67|multimodal|8080"
 )
+if [[ "$DOCLING_NODE_AS_WORKER" == "true" ]]; then
+    NODES+=("${DOCLING_NODE_IP}|text|8080")
+fi
 if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
     NODES+=("${CONTROLLER_IP}|text|8080")
 fi

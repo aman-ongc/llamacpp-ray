@@ -24,13 +24,14 @@ def get_redis() -> aioredis.Redis:
     return _redis
 
 
-DEFAULT_RATE_LIMIT = 60
+TEXT_RATE_LIMIT = 60
+MULTIMODAL_RATE_LIMIT = 500
 DEFAULT_WINDOW_SEC = 60
 
 
 async def check_rate_limit(
     user_id: int,
-    limit: int = DEFAULT_RATE_LIMIT,
+    limit: int = TEXT_RATE_LIMIT,
     window_sec: int = DEFAULT_WINDOW_SEC,
 ) -> None:
     redis_client = get_redis()

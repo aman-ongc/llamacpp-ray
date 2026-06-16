@@ -6,7 +6,8 @@
 #
 # Node layout:
 #   WS-11  (10.208.211.62) — Ray head; text worker only if CONTROLLER_AS_WORKER=true
-#   Text   (10.208.211.52–.61) — 10 nodes, Gemma 4 26B QAT, --parallel 1, -c 65536
+#   WS-3   (10.208.211.54) — docling/dev node; text worker only if DOCLING_NODE_AS_WORKER=true
+#   Text   (10.208.211.52–.61) — up to 10 nodes, Gemma 4 26B QAT, --parallel 1, -c 65536
 #   Multi  (10.208.211.63/.64/.65/.67) — 4 nodes, Qwen3-VL-8B, --parallel 4, -c 65536
 # =============================================================================
 set -euo pipefail
@@ -41,6 +42,11 @@ SUDO_PASS="Ongc@1234"
 # When true: WS-11 joins text pool (llama-server started, text_node resource registered).
 # When false (default): WS-11 is head-only — no llama-server, no text requests.
 CONTROLLER_AS_WORKER="${CONTROLLER_AS_WORKER:-false}"
+
+# When true: WS-3 (.54) joins text pool (llama-server started on it).
+# When false (default): .54 is reserved for docling/development — no llama-server.
+DOCLING_NODE_AS_WORKER="${DOCLING_NODE_AS_WORKER:-false}"
+DOCLING_NODE_IP="10.208.211.54"
 
 # Proxy bypass — critical for all internal traffic
 export no_proxy="localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in"
@@ -167,10 +173,22 @@ fi
 
 info "Starting remote worker nodes (text pool .52–.61, multimodal pool .63/.64/.65/.67) in parallel..."
 TEXT_WORKERS=(
-    "10.208.211.52" "10.208.211.53" "10.208.211.54" "10.208.211.55"
+    "10.208.211.52" "10.208.211.53" "10.208.211.55"
     "10.208.211.56" "10.208.211.57" "10.208.211.58" "10.208.211.59"
     "10.208.211.60" "10.208.211.61"
 )
+# WS-3 (.54) joins text pool only when DOCLING_NODE_AS_WORKER=true.
+if [[ "$DOCLING_NODE_AS_WORKER" == "true" ]]; then
+    TEXT_WORKERS+=("$DOCLING_NODE_IP")
+    info "WS-3 (${DOCLING_NODE_IP}) docling-node-as-worker enabled — adding to text pool"
+else
+    info "WS-3 (${DOCLING_NODE_IP}) reserved for docling/dev — killing any stale llama-server on it..."
+    sshpass -p "$SUDO_PASS" ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+        "administrator@${DOCLING_NODE_IP}" \
+        'pids=$(pgrep -f llama-server 2>/dev/null); [ -n "$pids" ] && kill $pids 2>/dev/null; true' \
+        && ok "WS-3 llama-server stopped (or was already down)" \
+        || warn "WS-3 SSH unreachable — could not enforce llama-server shutdown"
+fi
 for worker in "${TEXT_WORKERS[@]}"; do
     info "  Launching text worker ${worker}..."
     MODEL_PATH="$TEXT_MODEL" \
@@ -191,9 +209,10 @@ for mm_ip in "${MULTIMODAL_NODE_IPS[@]}"; do
         > "/tmp/worker-${mm_ip}.log" 2>&1 &
 done
 
-# 14 workers + 1 head = 15 total Ray nodes
-EXPECTED_NODES=15
-[[ "$CONTROLLER_AS_WORKER" == "true" ]] && EXPECTED_NODES=15  # head already counted
+# Base: 1 head + 9 text (.52-.61 minus .54) + 4 multimodal = 14 Ray nodes
+EXPECTED_NODES=14
+[[ "$DOCLING_NODE_AS_WORKER" == "true" ]] && (( EXPECTED_NODES += 1 ))
+[[ "$CONTROLLER_AS_WORKER" == "true" ]] && (( EXPECTED_NODES += 1 ))
 info "Waiting for ${EXPECTED_NODES} nodes to join cluster (up to 180s)..."
 for i in {1..36}; do
     node_count=$(ray status --address "${CONTROLLER_IP}:${RAY_PORT}" 2>/dev/null \
@@ -223,6 +242,7 @@ info "Starting llama-server watchdog..."
 pkill -f llama_watchdog.sh 2>/dev/null || true
 sleep 1
 CONTROLLER_AS_WORKER="$CONTROLLER_AS_WORKER" \
+DOCLING_NODE_AS_WORKER="$DOCLING_NODE_AS_WORKER" \
 LLAMA_SERVER="$LLAMA_SERVER" \
 SSH_PASS="$SUDO_PASS" \
 nohup bash "$PROJECT_DIR/scripts/llama_watchdog.sh" \
@@ -244,11 +264,12 @@ echo -e "  ${CYAN}Ray Dashboard${NC}   http://${CONTROLLER_IP}:8265"
 echo -e "  ${CYAN}Gateway direct${NC}  http://${CONTROLLER_IP}:18000"
 echo -e "  ${CYAN}Watchdog log${NC}    /tmp/llama-watchdog.log  (PID: $(cat /tmp/llama-watchdog.pid 2>/dev/null || echo 'not started'))"
 echo ""
-if [[ "$CONTROLLER_AS_WORKER" == "true" ]]; then
-    echo -e "  ${CYAN}Text nodes${NC}      .52–.62 (11 nodes) → Gemma 4 26B QAT --parallel 1"
-else
-    echo -e "  ${CYAN}Text nodes${NC}      .52–.61 (10 nodes) → Gemma 4 26B QAT --parallel 1  [WS-11 head-only]"
-fi
+TEXT_NODE_COUNT=${#TEXT_WORKERS[@]}
+[[ "$CONTROLLER_AS_WORKER" == "true" ]] && (( TEXT_NODE_COUNT += 1 ))
+TEXT_NODE_NOTES=""
+[[ "$CONTROLLER_AS_WORKER" != "true" ]] && TEXT_NODE_NOTES+=" [WS-11 head-only]"
+[[ "$DOCLING_NODE_AS_WORKER" != "true" ]] && TEXT_NODE_NOTES+=" [WS-3 docling/dev]"
+echo -e "  ${CYAN}Text nodes${NC}      ${TEXT_NODE_COUNT} active → Gemma 4 26B QAT --parallel 1${TEXT_NODE_NOTES}"
 echo -e "  ${CYAN}Multimodal${NC}      .63/.64/.65/.67 (4 nodes) → Qwen3-VL-8B --parallel 4 -c 65536"
 echo ""
 echo -e "  ${YELLOW}Manage users/keys:${NC}"
