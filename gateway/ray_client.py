@@ -1,3 +1,4 @@
+import asyncio
 import os
 from collections.abc import AsyncIterator
 from typing import Any
@@ -6,6 +7,18 @@ import httpx
 from fastapi import HTTPException
 
 from gateway.config import settings
+
+# Retry only on 503 (node crashed/restarting) — other replicas are likely free.
+# Exponential backoff, capped at 2 retries (3 attempts total) since the
+# inference pool is small and a third straight 503 means the pool is degraded.
+_RETRY_BACKOFFS_SECONDS = [0.5, 1.5]
+
+# Retry once on a gateway-side read timeout (the request hung on a wedged
+# replica past request_timeout_seconds). The retry goes back through the
+# central proxy, which should land on a different, healthy replica.
+# Non-streaming only — a streaming response may have already sent bytes to
+# the client by the time it times out, so it can't be safely retried.
+_TIMEOUT_MAX_RETRIES = 1
 
 
 def _timeout() -> httpx.Timeout:
@@ -102,14 +115,25 @@ async def submit_inference(
     else:
         url = f"{_select_text_proxy_url(affinity_key)}/text/v1/chat/completions"
     async with httpx.AsyncClient(timeout=_timeout(), transport=_transport(), trust_env=True) as client:
-        response = await client.post(url, json=payload, headers=headers)
-        if response.is_error:
+        for timeout_attempt in range(_TIMEOUT_MAX_RETRIES + 1):
             try:
-                detail = response.json()
-            except Exception:
-                detail = response.text or "Inference backend error"
-            raise HTTPException(status_code=response.status_code, detail=detail)
-        return response.json()
+                for attempt, backoff in enumerate([0.0, *_RETRY_BACKOFFS_SECONDS]):
+                    if backoff:
+                        await asyncio.sleep(backoff)
+                    response = await client.post(url, json=payload, headers=headers)
+                    if response.is_error:
+                        try:
+                            detail = response.json()
+                        except Exception:
+                            detail = response.text or "Inference backend error"
+                        if response.status_code == 503 and attempt < len(_RETRY_BACKOFFS_SECONDS):
+                            continue
+                        raise HTTPException(status_code=response.status_code, detail=detail)
+                    return response.json()
+            except (httpx.ReadTimeout, httpx.TimeoutException):
+                if timeout_attempt < _TIMEOUT_MAX_RETRIES:
+                    continue
+                raise
 
 
 async def stream_inference(
@@ -126,8 +150,14 @@ async def stream_inference(
     else:
         url = f"{_select_text_proxy_url(affinity_key)}/text/v1/chat/completions"
     async with httpx.AsyncClient(timeout=_timeout(), transport=_transport(), trust_env=True) as client:
-        async with client.stream("POST", url, json=payload, headers=headers) as response:
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if line:
-                    yield f"{line}\n\n"
+        for attempt, backoff in enumerate([0.0, *_RETRY_BACKOFFS_SECONDS]):
+            if backoff:
+                await asyncio.sleep(backoff)
+            async with client.stream("POST", url, json=payload, headers=headers) as response:
+                if response.status_code == 503 and attempt < len(_RETRY_BACKOFFS_SECONDS):
+                    continue
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if line:
+                        yield f"{line}\n\n"
+                return

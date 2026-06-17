@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-llama.cpp cluster sync utility
+llama.cpp clust2er sync utility
 
 Features:
 - Detect active WSL nodes
@@ -11,18 +11,14 @@ Features:
 - Rsync source code
 - Exclude build artifacts only
 - Detect source changes
-- Build only when required (or --force to always rebuild)
+- Build only when required
 - Validate critical files
 - Cron friendly
-- --nodes to target specific IPs
-- --force to rebuild even without source changes
 """
 
-import argparse
 import logging
 import os
 import subprocess
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -34,10 +30,6 @@ SSH_PASSWORD = os.getenv("SSH_PASSWORD", "Ongc@1234")
 LLAMA_CPP_PATH = (
     "/home/administrator/projects/local_llm/llama.cpp"
 )
-
-# llm-platform venv contains Ray and all gateway/worker deps.
-# Workers need it to run `ray start` and attach to the cluster.
-LLM_PLATFORM_VENV_PATH = "/mnt/d/VirtualEnvironments/llm-platform"
 
 SSH_TIMEOUT = 5
 RSYNC_TIMEOUT = 1800
@@ -172,13 +164,18 @@ def ensure_dependencies(ip: str):
 
     logger.info(f"[{ip}] Installing dependencies")
 
-    install_cmd = (
-        f"echo '{SSH_PASSWORD}' | sudo -S bash -c '"
-        "apt-get update && "
-        "apt-get install -y "
-        "build-essential cmake ninja-build rsync sshpass git pkg-config libssl-dev"
-        "'"
-    )
+    install_cmd = """
+    sudo apt update &&
+    sudo apt install -y \
+        build-essential \
+        cmake \
+        ninja-build \
+        rsync \
+        sshpass \
+        git \
+        pkg-config \
+        libssl-dev
+    """
 
     try:
 
@@ -362,7 +359,7 @@ def build_remote(ip: str):
     build_cmd = f"""
     cd {LLAMA_CPP_PATH} && \
     rm -rf build && \
-    cmake -B build -G Ninja -DGGML_CUDA=ON && \
+    cmake -B build -G Ninja && \
     cmake --build build -j$(nproc)
     """
 
@@ -389,142 +386,86 @@ def build_remote(ip: str):
         logger.error(f"[{ip}] Build exception: {e}")
         return False
 
-# ── llm-platform Venv Sync ────────────────────────────────────────────
-
-def sync_llm_platform_venv(ip: str) -> bool:
-    """Rsync the llm-platform venv from controller to a worker node.
-
-    Workers use /mnt/d/VirtualEnvironments/llm-platform/bin/ray to join
-    the Ray cluster.  The venv path is identical on all nodes so the
-    synced copy is immediately usable without relinking.
-    """
-
-    logger.info(f"[{ip}] Syncing llm-platform venv")
-
-    # Ensure parent directory exists on remote
-    result = run_ssh(
-        ip,
-        f"mkdir -p {LLM_PLATFORM_VENV_PATH}",
-        timeout=30,
-    )
-    if result.returncode != 0:
-        logger.error(f"[{ip}] Could not create venv dir: {result.stderr[:400]}")
-        return False
-
-    ssh_opts = (
-        f"ssh "
-        f"-o StrictHostKeyChecking=no "
-        f"-o ConnectTimeout={SSH_TIMEOUT}"
-    )
-
-    cmd = [
-        "sshpass",
-        f"-p{SSH_PASSWORD}",
-        "rsync",
-        "-az",
-        "--delete",
-        "--partial",
-        "--human-readable",
-        f"--timeout={RSYNC_TIMEOUT}",
-        "-e", ssh_opts,
-        f"{LLM_PLATFORM_VENV_PATH}/",
-        f"{SSH_USER}@{ip}:{LLM_PLATFORM_VENV_PATH}/",
-    ]
-
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=RSYNC_TIMEOUT + 60,
-        )
-        if result.returncode == 0:
-            logger.info(f"[{ip}] llm-platform venv sync OK")
-            return True
-        logger.error(f"[{ip}] venv rsync failed: {result.stderr[-800:]}")
-        return False
-
-    except Exception as e:
-        logger.error(f"[{ip}] venv rsync exception: {e}")
-        return False
-
-
 # ── Main ──────────────────────────────────────────────────────────────
 
 def main():
 
-    parser = argparse.ArgumentParser(description="llama.cpp cluster sync")
-    parser.add_argument(
-        "--nodes",
-        help="Comma-separated IPs to target (default: all active nodes)",
-        default=None,
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Force rebuild even when no source changes detected",
-    )
-    args = parser.parse_args()
-
     logger.info("=" * 80)
     logger.info("Starting llama.cpp sync job")
-    if args.force:
-        logger.info("--force: will rebuild regardless of source changes")
 
-    if args.nodes:
-        target_nodes = [ip.strip() for ip in args.nodes.split(",") if ip.strip()]
-        logger.info(f"Targeting specific nodes: {target_nodes}")
-    else:
-        target_nodes = get_active_nodes()
+    active_nodes = get_active_nodes()
 
-    if not target_nodes:
+    if not active_nodes:
 
         logger.warning("No active nodes found")
         return
 
-    def process_node(ip: str) -> tuple[str, bool]:
+    for ip in active_nodes:
 
         logger.info(f"[{ip}] Processing node")
 
-        sync_llm_platform_venv(ip)
+        # ── Dependencies ─────────────────────────────
 
         deps_ok = ensure_dependencies(ip)
+
         if not deps_ok:
-            logger.error(f"[{ip}] Dependency setup failed")
-            return ip, False
+
+            logger.error(
+                f"[{ip}] Dependency setup failed"
+            )
+
+            continue
+
+        # ── Repo Structure ───────────────────────────
 
         repo_ok = ensure_remote_repo_structure(ip)
+
         if not repo_ok:
-            return ip, False
+
+            continue
+
+        # ── Sync ─────────────────────────────────────
 
         sync_ok, source_changed = rsync_llama_cpp(ip)
-        if not sync_ok:
-            logger.error(f"[{ip}] Sync failed")
-            return ip, False
 
-        if not source_changed and not args.force:
-            logger.info(f"[{ip}] Skipping build (no source changes)")
-            return ip, True
+        if not sync_ok:
+
+            logger.error(f"[{ip}] Sync failed")
+            continue
+
+        # ── Skip Build ───────────────────────────────
+
+        if not source_changed:
+
+            logger.info(
+                f"[{ip}] Skipping build "
+                f"(no source changes)"
+            )
+
+            continue
+
+        # ── Validate ─────────────────────────────────
 
         valid = validate_required_files(ip)
+
         if not valid:
-            logger.error(f"[{ip}] Validation failed")
-            return ip, False
+
+            logger.error(
+                f"[{ip}] Validation failed"
+            )
+
+            continue
+
+        # ── Build ────────────────────────────────────
 
         build_ok = build_remote(ip)
+
         if not build_ok:
+
             logger.error(f"[{ip}] Build failed")
-            return ip, False
+            continue
 
         logger.info(f"[{ip}] Node updated successfully")
-        return ip, True
-
-    with ThreadPoolExecutor(max_workers=len(target_nodes)) as executor:
-        futures = {executor.submit(process_node, ip): ip for ip in target_nodes}
-        for future in as_completed(futures):
-            ip, ok = future.result()
-            status = "OK" if ok else "FAILED"
-            logger.info(f"[{ip}] Finished — {status}")
 
     logger.info("llama.cpp sync job completed")
     logger.info("=" * 80)

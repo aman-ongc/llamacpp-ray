@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     multimodal_llama_parallel: int = 4
     llama_ngl: int = 999
 
-    request_timeout_seconds: float = 1800.0
+    request_timeout_seconds: float = 900.0
     connect_timeout_seconds: float = 2.0
 
     # Kept for backward compatibility with admin/logging code that references controller IP.
