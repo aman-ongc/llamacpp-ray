@@ -77,6 +77,11 @@ class _LlamaWorkerBase:
                     {"error": "Inference server unavailable. The server may be starting up or restarting. Please retry in a few moments.", "node_ip": self.node_ip},
                     status_code=503,
                 )
+            except (httpx.ReadTimeout, httpx.TimeoutException):
+                return JSONResponse(
+                    {"error": "Inference timed out on this node — it may be overloaded or stuck. Please retry.", "node_ip": self.node_ip},
+                    status_code=504,
+                )
             return JSONResponse(result)
         return JSONResponse({"error": "not found"}, status_code=404)
 
@@ -111,6 +116,7 @@ class _LlamaWorkerBase:
 @serve.deployment(
     num_replicas=settings.text_serve_replicas,
     max_ongoing_requests=settings.llama_parallel,
+    max_queued_requests=settings.text_serve_replicas * 4,
     ray_actor_options={"num_cpus": 1, "resources": {"text_node": 0.01}},
 )
 class TextWorker(_LlamaWorkerBase):
@@ -123,6 +129,7 @@ class TextWorker(_LlamaWorkerBase):
 @serve.deployment(
     num_replicas=settings.multimodal_serve_replicas,
     max_ongoing_requests=settings.multimodal_llama_parallel,
+    max_queued_requests=settings.multimodal_serve_replicas * settings.multimodal_llama_parallel * 4,
     ray_actor_options={"num_cpus": 1, "resources": {"multimodal_node": 0.01}},
 )
 class MultimodalWorker(_LlamaWorkerBase):

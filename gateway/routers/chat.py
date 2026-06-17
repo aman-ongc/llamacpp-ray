@@ -18,6 +18,8 @@ from gateway.metrics import (
     ACTIVE_REQUESTS,
     COMPLETION_TOKENS,
     PROMPT_TOKENS,
+    QUEUE_REJECTED,
+    RATE_LIMITED,
     REQUEST_COUNT,
     REQUEST_LATENCY_MS,
     TOTAL_TOKENS,
@@ -109,6 +111,10 @@ def _build_success_response_preview(result: dict) -> str:
     return json.dumps(preview)
 
 
+def _err_text(exc: Exception) -> str:
+    return str(exc) or repr(exc)
+
+
 def _estimate_prompt_tokens(messages: list[ChatMessage]) -> int:
     total = 0
     for message in messages:
@@ -129,20 +135,45 @@ async def chat_completions(
 ):
     api_key_prefix = getattr(request.state, "api_key_prefix", None)
     multimodal = _is_multimodal_request(payload.messages)
+    request_type = "multimodal" if multimodal else "text"
+    start = time.perf_counter()
     try:
         await check_rate_limit(
             user.id,
             limit=MULTIMODAL_RATE_LIMIT if multimodal else TEXT_RATE_LIMIT,
         )
-    except HTTPException:
+    except HTTPException as exc:
+        RATE_LIMITED.labels(request_type=request_type).inc()
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        error_str = json.dumps(exc.detail) if isinstance(exc.detail, (dict, list)) else str(exc.detail)
+        REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code=str(exc.status_code), streaming=str(payload.stream).lower(), username=user.username, node_ip="unknown").inc()
+        try:
+            async with AsyncSessionLocal() as session:
+                await log_request(
+                    session,
+                    user=user,
+                    api_key_prefix=api_key_prefix,
+                    model=_MODEL_ALIAS,
+                    node_ip=None,
+                    prompt_tokens=_estimate_prompt_tokens(payload.messages),
+                    completion_tokens=0,
+                    latency_ms=latency_ms,
+                    queue_ms=0,
+                    status_code=exc.status_code,
+                    error_message=error_str,
+                    streaming=payload.stream,
+                    request_type=request_type,
+                    request_preview=_build_request_preview(payload.messages, full=True),
+                    response_preview=error_str,
+                )
+        except Exception:
+            logger.exception("Failed to log rate-limited request (status=%d)", exc.status_code)
         raise
     except RedisError:
         pass
-    request_type = "multimodal" if multimodal else "text"
     # Affinity only applies to text pool (multimodal pool is a single node).
     affinity_key = api_key_prefix if (payload.session_affinity and not multimodal) else None
 
-    start = time.perf_counter()
     ACTIVE_REQUESTS.inc()
     try:
         if payload.stream:
@@ -163,7 +194,9 @@ async def chat_completions(
                 finally:
                     latency_ms = int((time.perf_counter() - start) * 1000)
                     status_code = 500 if stream_error is not None else 200
-                    error_str = str(stream_error) if stream_error is not None else None
+                    error_str = _err_text(stream_error) if stream_error is not None else None
+                    if isinstance(stream_error, HTTPException) and stream_error.status_code == 503:
+                        QUEUE_REJECTED.labels(request_type=request_type).inc()
                     async with AsyncSessionLocal() as session:
                         await log_request(
                             session,
@@ -230,6 +263,8 @@ async def chat_completions(
     except HTTPException as exc:
         latency_ms = int((time.perf_counter() - start) * 1000)
         error_str = json.dumps(exc.detail) if isinstance(exc.detail, (dict, list)) else str(exc.detail)
+        if exc.status_code == 503:
+            QUEUE_REJECTED.labels(request_type=request_type).inc()
         REQUEST_COUNT.labels(model=_MODEL_ALIAS, status_code=str(exc.status_code), streaming="false", username=user.username, node_ip="unknown").inc()
         try:
             async with AsyncSessionLocal() as session:
@@ -269,11 +304,11 @@ async def chat_completions(
                     latency_ms=latency_ms,
                     queue_ms=0,
                     status_code=500,
-                    error_message=str(exc),
+                    error_message=_err_text(exc),
                     streaming=payload.stream,
                     request_type=request_type,
                     request_preview=_build_request_preview(payload.messages, full=True),
-                    response_preview=str(exc),
+                    response_preview=_err_text(exc),
                 )
         except Exception:
             logger.exception("Failed to log inference exception: %s", exc)

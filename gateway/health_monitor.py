@@ -5,6 +5,7 @@ import os
 import httpx
 
 from gateway.config import settings
+from gateway.metrics import HEALTHY_MULTIMODAL_NODES, HEALTHY_TEXT_NODES
 
 logger = logging.getLogger(__name__)
 
@@ -63,4 +64,6 @@ async def health_probe_loop() -> None:
     while True:
         await _probe_pool(text_ips, settings.text_llama_port, healthy_text_nodes)
         await _probe_pool(multimodal_ips, settings.multimodal_llama_port, healthy_multimodal_nodes)
+        HEALTHY_TEXT_NODES.set(len(healthy_text_nodes))
+        HEALTHY_MULTIMODAL_NODES.set(len(healthy_multimodal_nodes))
         await asyncio.sleep(PROBE_INTERVAL)

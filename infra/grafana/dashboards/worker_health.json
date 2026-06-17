@@ -2,7 +2,7 @@
   "title": "ONGC Worker Node Health",
   "uid": "worker-health",
   "schemaVersion": 38,
-  "version": 2,
+  "version": 3,
   "refresh": "10s",
   "time": {
     "from": "now-1h",
@@ -1380,6 +1380,96 @@
             "uid": "prometheus"
           },
           "legendFormat": "{{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 431,
+      "title": "Healthy Text Nodes",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 98
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 10,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llm_healthy_text_nodes",
+          "legendFormat": "healthy text nodes",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 432,
+      "title": "Healthy Multimodal Nodes",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 98
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 4,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "llm_healthy_multimodal_nodes",
+          "legendFormat": "healthy multimodal nodes",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ]
     }

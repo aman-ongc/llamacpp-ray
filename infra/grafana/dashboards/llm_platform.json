@@ -2,7 +2,7 @@
   "title": "ONGC LLM Inference Platform",
   "uid": "llm-platform",
   "schemaVersion": 38,
-  "version": 4,
+  "version": 6,
   "refresh": "10s",
   "time": {
     "from": "now-1h",
@@ -144,7 +144,7 @@
     },
     {
       "id": 3,
-      "title": "Predicted Tokens/sec \u2014 Text",
+      "title": "Predicted Tokens/sec — Text",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -196,7 +196,7 @@
     },
     {
       "id": 4,
-      "title": "Predicted Tokens/sec \u2014 Multimodal",
+      "title": "Predicted Tokens/sec — Multimodal",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -248,7 +248,7 @@
     },
     {
       "id": 5,
-      "title": "Token Throughput \u2014 Text",
+      "title": "Token Throughput — Text",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -301,7 +301,7 @@
     },
     {
       "id": 6,
-      "title": "Token Throughput \u2014 Multimodal",
+      "title": "Token Throughput — Multimodal",
       "type": "timeseries",
       "datasource": {
         "type": "prometheus",
@@ -580,6 +580,94 @@
           "refId": "A",
           "expr": "sum by(status_code) (rate(llm_requests_total[5m]))",
           "legendFormat": "{{status_code}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Queue Rejections by Request Type",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(request_type) (rate(llm_queue_rejected_total[5m]))",
+          "legendFormat": "{{request_type}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Rate-Limited (429) by Request Type",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "options": {
+        "tooltip": {
+          "mode": "multi"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8
+          }
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by(request_type) (rate(llm_rate_limited_total[5m]))",
+          "legendFormat": "{{request_type}}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"

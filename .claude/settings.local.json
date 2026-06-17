@@ -18,7 +18,11 @@
       "Bash(sudo docker:*)",
       "Bash(cat startup_scripts/* scripts/*)",
       "Bash(ssh:*)",
-      "Bash(sshpass:*)"
+      "Bash(sshpass:*)",
+      "Bash(mkdir -p /tmp/stress_test)",
+      "Bash(rm -f /tmp/stress_test/*)",
+      "Read(//tmp/**)",
+      "Bash(curl --noproxy '*' -s -o /dev/null -w \"%{http_code}\\\\n\" -X POST http://localhost:18000/v1/chat/completions -H \"Authorization: Bearer sk-ongc-An0SIhEQMxAI27GLejMVqmHmFwWslrCb74SyG3LLWKw\" -H \"Content-Type: application/json\" -d '{\"messages\":[{\"role\":\"user\",\"content\":\"say ok\"}],\"max_tokens\":5}' --max-time 60)"
     ]
   }
 }

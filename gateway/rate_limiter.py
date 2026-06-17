@@ -24,7 +24,7 @@ def get_redis() -> aioredis.Redis:
     return _redis
 
 
-TEXT_RATE_LIMIT = 60
+TEXT_RATE_LIMIT = 32
 MULTIMODAL_RATE_LIMIT = 500
 DEFAULT_WINDOW_SEC = 60
 

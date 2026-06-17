@@ -32,6 +32,24 @@ ACTIVE_REQUESTS = Gauge(
     "llm_active_requests",
     "Currently active inference requests",
 )
+HEALTHY_TEXT_NODES = Gauge(
+    "llm_healthy_text_nodes",
+    "Number of currently healthy text nodes",
+)
+HEALTHY_MULTIMODAL_NODES = Gauge(
+    "llm_healthy_multimodal_nodes",
+    "Number of currently healthy multimodal nodes",
+)
+QUEUE_REJECTED = Counter(
+    "llm_queue_rejected_total",
+    "Requests rejected because the Ray Serve queue was full",
+    ["request_type"],
+)
+RATE_LIMITED = Counter(
+    "llm_rate_limited_total",
+    "Requests rejected by the per-user rate limiter",
+    ["request_type"],
+)
 
 
 def metrics_response() -> Response:
