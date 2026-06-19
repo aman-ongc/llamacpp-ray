@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# llama-server watchdog — runs on WS-11, monitors all worker nodes.
+# llama-server + raylet watchdog — runs on WS-11, monitors all worker nodes.
 # Started by startup_scripts/start_linux.sh after cluster is up.
 # Logs to stdout (redirected to /tmp/llama-watchdog.log by caller).
 set +e  # single bad iteration must NOT kill the loop
@@ -10,6 +10,9 @@ SSH_PASS="${SSH_PASS:-Ongc@1234}"
 LLAMA_SERVER="${LLAMA_SERVER:-/home/administrator/projects/local_llm/llama.cpp/build/bin/llama-server}"
 CONTROLLER_AS_WORKER="${CONTROLLER_AS_WORKER:-false}"
 CONTROLLER_IP="10.208.211.62"
+RAY_HEAD_IP="${RAY_HEAD_IP:-10.208.211.62}"
+RAY_PORT="${RAY_PORT:-6379}"
+RAY_BIN="${RAY_BIN:-/mnt/d/VirtualEnvironments/llm-platform/bin/ray}"
 # WS-3 (.54): docling/dev node — excluded from watchdog unless DOCLING_NODE_AS_WORKER=true.
 DOCLING_NODE_AS_WORKER="${DOCLING_NODE_AS_WORKER:-false}"
 DOCLING_NODE_IP="10.208.211.54"
@@ -101,6 +104,55 @@ wait_for_health() {
     return 1
 }
 
+raylet_resource_for_type() {
+    [[ "$1" == "multimodal" ]] && echo '{"multimodal_node": 1}' || echo '{"text_node": 1}'
+}
+
+raylet_alive() {
+    local ip="$1"
+    remote_exec "$ip" "pgrep -f raylet >/dev/null 2>&1"
+}
+
+restart_raylet() {
+    local ip="$1" resource="$2"
+    local cmd="export no_proxy='localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in'; \
+        export NO_PROXY=\"\$no_proxy\"; export RAY_grpc_enable_http_proxy=0; \
+        nohup ${RAY_BIN} start --address=${RAY_HEAD_IP}:${RAY_PORT} \
+        --node-ip-address=${ip} --num-gpus=0 --num-cpus=6 \
+        --resources='${resource}' >/tmp/ray-worker.log 2>&1 &"
+    remote_exec "$ip" "$(printf 'bash -c %q' "$cmd")"
+}
+
+wait_for_raylet() {
+    local ip="$1" elapsed=0
+    while (( elapsed < RESTART_WAIT )); do
+        raylet_alive "$ip" && return 0
+        sleep 5
+        (( elapsed += 5 ))
+    done
+    return 1
+}
+
+check_and_restart_raylet() {
+    local ip="$1" type="$2"
+    [[ "$ip" == "$CONTROLLER_IP" ]] && return 0  # head node, not a worker raylet
+    if raylet_alive "$ip"; then
+        return 0
+    fi
+    log "${ip} (${type}) raylet DOWN — restarting (rejoining Ray cluster)"
+    local started
+    started=$(date +%s)
+    local resource
+    resource="$(raylet_resource_for_type "$type")"
+    restart_raylet "$ip" "$resource" || { log "${ip} raylet restart command failed"; return 1; }
+    if wait_for_raylet "$ip"; then
+        local elapsed=$(( $(date +%s) - started ))
+        log "${ip} (${type}) raylet recovered after ${elapsed}s"
+    else
+        log "${ip} (${type}) raylet FAILED to recover after ${RESTART_WAIT}s — will retry next cycle"
+    fi
+}
+
 check_and_restart() {
     local ip="$1" type="$2" port="$3"
     if curl --noproxy '*' -sf "http://${ip}:${port}/health" >/dev/null 2>&1; then
@@ -131,6 +183,7 @@ while true; do
     for node in "${NODES[@]}"; do
         IFS='|' read -r ip type port <<< "$node"
         check_and_restart "$ip" "$type" "$port" &
+        check_and_restart_raylet "$ip" "$type" &
     done
     wait   # wait for all parallel checks before sleeping
     sleep "$POLL_INTERVAL"

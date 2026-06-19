@@ -113,11 +113,18 @@ class _LlamaWorkerBase:
 
 # Replicas pinned to text nodes via custom Ray resource "text_node".
 # Text nodes (WS-11, WS-03, WS-08) must be started with --resources='{"text_node": 1}'.
+# Each node advertises exactly 1.0 of "text_node" and each replica claims the
+# full 1.0 — this is load-bearing, not decorative: it's what stops Ray from
+# stacking two replicas on one GPU node (which previously left one node with
+# zero replicas and another fielding double traffic against a single
+# llama-server process). max_replicas_per_node is a second, explicit guard
+# for the same invariant.
 @serve.deployment(
     num_replicas=settings.text_serve_replicas,
     max_ongoing_requests=settings.llama_parallel,
     max_queued_requests=settings.text_serve_replicas * 4,
-    ray_actor_options={"num_cpus": 1, "resources": {"text_node": 0.01}},
+    max_replicas_per_node=1,
+    ray_actor_options={"num_cpus": 1, "resources": {"text_node": 1}},
 )
 class TextWorker(_LlamaWorkerBase):
     def __init__(self) -> None:
@@ -126,11 +133,14 @@ class TextWorker(_LlamaWorkerBase):
 
 # Replica pinned to multimodal node via custom Ray resource "multimodal_node".
 # WS-13 must be started with --resources='{"multimodal_node": 1}'.
+# See TextWorker comment above — full-unit resource claim + max_replicas_per_node
+# enforce exactly one replica per multimodal GPU node.
 @serve.deployment(
     num_replicas=settings.multimodal_serve_replicas,
     max_ongoing_requests=settings.multimodal_llama_parallel,
     max_queued_requests=settings.multimodal_serve_replicas * settings.multimodal_llama_parallel * 4,
-    ray_actor_options={"num_cpus": 1, "resources": {"multimodal_node": 0.01}},
+    max_replicas_per_node=1,
+    ray_actor_options={"num_cpus": 1, "resources": {"multimodal_node": 1}},
 )
 class MultimodalWorker(_LlamaWorkerBase):
     def __init__(self) -> None:

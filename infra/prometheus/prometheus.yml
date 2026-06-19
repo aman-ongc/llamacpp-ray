@@ -38,6 +38,8 @@ scrape_configs:
         replacement: "host.docker.internal:${1}"
 
   - job_name: "nvidia-gpu-exporter"
+    scrape_interval: 30s
+    scrape_timeout: 25s
     static_configs:
       - targets:
           - "host.docker.internal:9835"
