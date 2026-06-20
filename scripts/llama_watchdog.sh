@@ -60,7 +60,9 @@ remote_exec() {
 
 restart_text_node() {
     local ip="$1"
-    local cmd="pkill llama-server || true; sleep 2; nohup ${LLAMA_SERVER} \
+    local cmd="pkill llama-server || true; sleep 2; \
+        mv /tmp/llama-server.log /tmp/llama-server.log.prev 2>/dev/null; \
+        nohup ${LLAMA_SERVER} \
         -m ${TEXT_MODEL} \
         -ngl 999 -c 65536 \
         --host ${ip} --port 8080 \
@@ -80,7 +82,9 @@ restart_text_node() {
 
 restart_multimodal_node() {
     local ip="$1"
-    local cmd="pkill llama-server || true; sleep 2; nohup ${LLAMA_SERVER} \
+    local cmd="pkill llama-server || true; sleep 2; \
+        mv /tmp/llama-server.log /tmp/llama-server.log.prev 2>/dev/null; \
+        nohup ${LLAMA_SERVER} \
         -m ${MULTIMODAL_MODEL} \
         --mmproj ${MULTIMODAL_MMPROJ} \
         -ngl 999 -c 65536 \
@@ -115,8 +119,15 @@ raylet_alive() {
 
 restart_raylet() {
     local ip="$1" resource="$2"
+    # `ray start` alone leaves the dead session's helper processes (log_monitor.py
+    # etc.) orphaned when the raylet crashed instead of exiting cleanly — these
+    # never get reaped on their own and accumulate across repeated flaps,
+    # eventually starving the CPU enough to make the *next* restart fail too.
+    # `ray stop --force` reaps anything left over from the dead session before
+    # we start a fresh one.
     local cmd="export no_proxy='localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in'; \
         export NO_PROXY=\"\$no_proxy\"; export RAY_grpc_enable_http_proxy=0; \
+        ${RAY_BIN} stop --force >/tmp/ray-stop.log 2>&1; sleep 1; \
         nohup ${RAY_BIN} start --address=${RAY_HEAD_IP}:${RAY_PORT} \
         --node-ip-address=${ip} --num-gpus=0 --num-cpus=6 \
         --resources='${resource}' >/tmp/ray-worker.log 2>&1 &"

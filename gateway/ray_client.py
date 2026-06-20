@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from collections.abc import AsyncIterator
 from typing import Any
@@ -8,6 +9,8 @@ import httpx
 from fastapi import HTTPException
 
 from gateway.config import settings
+
+logger = logging.getLogger(__name__)
 
 # Retry on 503 (node crashed/restarting, or Ray Serve queue backpressure),
 # 500 (replica died mid-request), and 504 (worker's own call to llama-server
@@ -32,9 +35,13 @@ from gateway.config import settings
 #      looks idle (zero queue depth) to Ray's scheduler, so it gets picked
 #      *more* often while broken, not less. We can't out-route that bias
 #      from the gateway; we can only out-wait it. Observed recovery time is
-#      ~56s, so the schedule is a cheap 1s check first (don't pay for a
-#      wait if the next attempt would've failed anyway), then 15s/30s/60s
-#      to clear the recovery window even under that bias.
+#      ~56s typically, but multimodal nodes have been seen taking 100s+
+#      (occasionally crossing the watchdog's own 120s restart-wait and
+#      needing a second cycle), so the schedule is a cheap 1s check first
+#      (don't pay for a wait if the next attempt would've failed anyway),
+#      then 15s/30s/60s/120s to clear the recovery window even under that
+#      bias. This tier only — case A/D's fast-reroute tier is untouched, so
+#      a known-healthy reroute never pays this latency.
 #   C) no node_ip, status 503 — Ray Serve's own queue backpressure
 #      (max_queued_requests exceeded), rejected by the proxy before any
 #      replica ran. There's no failed node to evict and no recovery for a
@@ -49,19 +56,31 @@ from gateway.config import settings
 #      this error, so the same proxy/affinity URL will land on a different,
 #      already-healthy replica on retry. No recovery wait needed — same
 #      fast tier as (A).
-#   E) httpx.ConnectError — the TCP connection to the proxy itself never
-#      came up (e.g. a node's Ray Serve proxy crash-restarting, or its
-#      raylet down entirely). This isn't an HTTP error response at all —
-#      no body, no node_ip to read — so it can't go through the same
-#      branch as A-D. We know which node we *tried* to reach from the URL
-#      we just attempted, though, so we evict that host directly and
-#      reroute like case A, instead of letting it escape uncaught (which
-#      is what happened before this case existed: a raw ConnectError burned
-#      the whole retry budget instantly and surfaced as an uncategorized 500).
+#   E) httpx.ConnectError / httpx.ConnectTimeout — the TCP connection to the
+#      proxy itself never came up (e.g. a node's Ray Serve proxy
+#      crash-restarting, its raylet down entirely, or — for ConnectTimeout —
+#      the head node's Serve HTTP proxy too backed up to accept new
+#      connections within connect_timeout_seconds). Neither is an HTTP error
+#      response at all — no body, no node_ip to read — so they can't go
+#      through the same branch as A-D. We know which node we *tried* to
+#      reach from the URL we just attempted, though, so we evict that host
+#      directly and reroute like case A, instead of letting it escape
+#      uncaught. ConnectTimeout used to fall through to the generic
+#      ReadTimeout/TimeoutException handler below, which only retries once,
+#      blind, against the same URL — fine for a slow read, useless for a
+#      connection that's never going to complete. Routing it through case E
+#      instead gives it the full tiered backoff, and (for multimodal, which
+#      has no alternate node to reroute to) the pool-exhausted wait instead
+#      of giving up after one blind retry.
 _RETRYABLE_STATUS_CODES = {500, 503, 504}
-_MAX_RETRIES = 4
+# _MAX_RETRIES caps both schedules below via _backoff()'s clamp. It's sized
+# to the longer one (pool-exhausted, 5 entries) — case A/D's fast tier just
+# clamps to its last entry (1.5s) for the extra attempt, so this doesn't add
+# latency to the fast-reroute path, only extends how long we wait out a node
+# that has no healthy alternate (case B/E-no-alternate).
+_MAX_RETRIES = 5
 _FAST_REROUTE_BACKOFFS_SECONDS = [0.5, 1.5]
-_POOL_EXHAUSTED_BACKOFFS_SECONDS = [1.0, 15.0, 30.0, 60.0]
+_POOL_EXHAUSTED_BACKOFFS_SECONDS = [1.0, 15.0, 30.0, 60.0, 120.0]
 
 
 def _backoff(schedule: list[float], attempt: int) -> float:
@@ -189,8 +208,17 @@ def _reroute_after_node_failure(
     if not candidates:
         candidates = [ip for ip in node_ips if ip not in excluded_nodes]
     if not candidates:
+        logger.warning(
+            "reroute: %s failed, no alternate %s node available (excluded=%s) — pool exhausted",
+            failed_ip, "multimodal" if multimodal else "text", sorted(excluded_nodes),
+        )
         return None
-    return f"http://{candidates[0]}:{_serve_port}{route_suffix}"
+    new_ip = candidates[0]
+    logger.info(
+        "reroute: %s failed, rerouting %s request to %s (excluded=%s)",
+        failed_ip, "multimodal" if multimodal else "text", new_ip, sorted(excluded_nodes),
+    )
+    return f"http://{new_ip}:{_serve_port}{route_suffix}"
 
 
 def _url_host(url: str) -> str | None:
@@ -238,7 +266,7 @@ async def submit_inference(
                 while True:
                     try:
                         response = await client.post(url, json=payload, headers=headers)
-                    except httpx.ConnectError as exc:
+                    except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
                         if attempt >= _MAX_RETRIES:
                             raise HTTPException(
                                 status_code=503,
@@ -328,7 +356,7 @@ async def stream_inference(
                         if line:
                             yield f"{line}\n\n"
                     return
-            except httpx.ConnectError as exc:
+            except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
                 # Connection never established — no bytes can have reached the
                 # client yet, so this is always safe to retry/reroute, unlike a
                 # mid-stream failure.
