@@ -35,7 +35,7 @@ schedules exist:
 | **B — pool exhausted / reroute defeated** | HTTP error response, `node_ip` present, no alternate node left — *or* a rerouted retry still landed back on the same bad node | Either every node is excluded, or Ray Serve's cluster-wide deployment router ignored our "different node" URL anyway (see note below) | Long backoff (`_POOL_EXHAUSTED_BACKOFFS_SECONDS`) to wait out the node's actual recovery window (~56s observed) rather than hammering a node that isn't back yet |
 | **C — queue backpressure** | HTTP 503, no `node_ip` | Ray Serve rejected the request before any replica ran (`max_queued_requests` exceeded) — real demand exceeds real capacity, nothing "failed" | **No retry.** A guessed wait doesn't fix a full queue — fail fast |
 | **D — actor died** | HTTP 500, no `node_ip` | The Ray actor itself died (e.g. controller force-killed a replica that failed its health check) before our worker code ran far enough to stamp a `node_ip` | Fast backoff, same tier as A — Ray's controller already evicted the dead replica, so the same URL lands on a different, already-healthy one |
-| **E — connection failure** | `httpx.ConnectError` or `httpx.ConnectTimeout` — no HTTP response at all | TCP connection to the target node's Ray Serve proxy port itself failed (proxy mid-crash-restart, raylet down entirely) or never completed within `connect_timeout_seconds` (proxy too backed up to accept new connections — observed on the multimodal pool's central chokepoint during sustained node instability, 2026-06-19/20) | Extract the host from the URL we just tried (no response body exists to read a `node_ip` from), evict it the same way as case A, reroute with fast backoff if an alternate exists, else the pool-exhausted backoff |
+| **E — connection failure** | `httpx.ConnectError`, `httpx.ConnectTimeout`, or `httpx.RemoteProtocolError` — no usable HTTP response at all | TCP connection to the target node's Ray Serve proxy port itself failed (proxy mid-crash-restart, raylet down entirely) or never completed within `connect_timeout_seconds` (proxy too backed up to accept new connections — observed on the multimodal pool's central chokepoint during sustained node instability, 2026-06-19/20), or the connection came up and then closed with nothing sent back (proxy forcibly killed mid-request by the watchdog's `ray stop --force` — observed 2026-06-20: two multimodal nodes' raylets force-restarted simultaneously, severing 16 in-flight requests at once) | Extract the host from the URL we just tried (no response body exists to read a `node_ip` from), evict it the same way as case A, reroute with fast backoff if an alternate exists, else the pool-exhausted backoff. For streaming, `RemoteProtocolError` is only retried if no bytes have reached the caller yet — a mid-stream disconnect after partial output is re-raised instead, since retrying would duplicate/corrupt what the client already received. |
 
 **Observability:** every reroute decision (`_reroute_after_node_failure`, shared
 by cases A, B, and E) now logs to `gateway/ray_client.py`'s logger:
@@ -90,9 +90,13 @@ gateway's table possible (it's where `node_ip` gets stamped):
 | `httpx.RemoteProtocolError` | 503 | Connection dropped mid-generation — server likely crashed |
 | `httpx.ConnectError` | 503 | llama-server unreachable from its own node — starting up or restarting |
 | `httpx.ReadTimeout` / `httpx.TimeoutException` | 504 | llama-server stuck/overloaded on this node |
+| any other `Exception` | 500 | Catch-all (added 2026-06-20) — e.g. llama-server returning an HTTP 200 with a malformed/truncated body during node instability, so `response.json()` raises something that isn't one of the four types above. Without this, the exception escaped the replica's handler entirely and Ray Serve's own default error page took over: plain-text `"Internal Server Error"`, **no `node_ip`** — which broke the gateway's whole classification scheme (a real incident: a single request burned ~21 minutes because the gateway's case D, "no node_ip + 500 → already evicted, safe blind retry," kept landing back on the same struggling node with no eviction, since there was no `node_ip` to evict) |
 
-All four include `node_ip` in the body, which is what feeds case A/B/D
-routing one layer up in the gateway.
+All five include `node_ip` in the body, which is what feeds case A/B/D
+routing one layer up in the gateway. The catch-all logs the full traceback
+(`logger.exception`) before responding, so an unclassified failure is now
+both diagnosable *and* routable, instead of silently breaking the gateway's
+eviction logic.
 
 ## Worst case: what the caller actually sees
 
@@ -103,10 +107,10 @@ outcomes, never anything unstructured:
 
 | Status | When | Body |
 |---|---|---|
-| **503** | Case E exhausted (`_MAX_RETRIES` `ConnectError`/`ConnectTimeout` attempts used up) | `{"error": "Unable to reach inference backend: <exc>"}` — raised explicitly in `submit_inference`/`stream_inference` |
+| **503** | Case E exhausted (`_MAX_RETRIES` `ConnectError`/`ConnectTimeout`/`RemoteProtocolError` attempts used up) | `{"error": "Unable to reach inference backend: <exc>"}` — raised explicitly in `submit_inference`/`stream_inference` |
 | **503** | Case C (queue backpressure) — immediate, no retry spent | Worker's `"Inference server unavailable..."` body passed through as-is |
 | **503 / 500 / 504** | Case A/B/D exhausted — `_MAX_RETRIES` used up while still landing on a failing node | The *last* attempt's real status code and body passed through verbatim (`raise HTTPException(status_code=response.status_code, detail=detail)`) — whatever the worker last reported (`worker/ray_worker.py`'s table below decides which of 500/503/504 that is) |
-| **500** | Any exception not classified into A–E (the catch-all in `gateway/routers/chat.py`) | Generic `"Inference request failed"`, `node_ip="unknown"` — by design a shrinking category as more cases get classified by name (case E was the last one added this way) |
+| **500** | Any exception not classified into A–E (the catch-all in `gateway/routers/chat.py`) | Generic `"Inference request failed"`, `node_ip="unknown"` — by design a shrinking category: most worker-side failures now carry `node_ip` thanks to `ray_worker.py`'s own catch-all (see below), so this path is now mainly gateway-side bugs, not worker-side ones |
 
 In other words: in the worst case a caller gets a `503` most of the time
 (every explicit-give-up path above defaults to it), occasionally a `500` or

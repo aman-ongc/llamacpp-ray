@@ -24,18 +24,22 @@ def get_redis() -> aioredis.Redis:
     return _redis
 
 
-TEXT_RATE_LIMIT = 32
-MULTIMODAL_RATE_LIMIT = 500
+TEXT_RATE_LIMIT = 20
+MULTIMODAL_RATE_LIMIT = 40
 DEFAULT_WINDOW_SEC = 60
 
 
 async def check_rate_limit(
     user_id: int,
+    pool: str = "text",
     limit: int = TEXT_RATE_LIMIT,
     window_sec: int = DEFAULT_WINDOW_SEC,
 ) -> None:
     redis_client = get_redis()
-    key = f"rl:user:{user_id}"
+    # Keyed per (user, pool) so a user's multimodal volume can't crowd out
+    # their own text quota under one shared counter (and vice versa) — text
+    # and multimodal now have fully independent sliding windows per user.
+    key = f"rl:user:{user_id}:{pool}"
     now = time.time()
     window_start = now - window_sec
 

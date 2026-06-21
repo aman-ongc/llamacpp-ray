@@ -344,7 +344,7 @@
             "mode": "thresholds"
           },
           "min": 0,
-          "max": 26,
+          "max": 18,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -354,11 +354,11 @@
               },
               {
                 "color": "yellow",
-                "value": 20
+                "value": 14
               },
               {
                 "color": "red",
-                "value": 26
+                "value": 18
               }
             ]
           }
@@ -956,7 +956,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "nvidia_smi_utilization_gpu_ratio{instance=~\"10[.]208[.]211[.](5[2-9]|6[0-2]):9835\"} * 100",
+          "expr": "nvidia_smi_utilization_gpu_ratio{instance=~\"10[.]208[.]211[.](52|53|55|56|57|58):9835\"} * 100",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1016,7 +1016,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "nvidia_smi_utilization_gpu_ratio{instance=~\"10[.]208[.]211[.](63|64|65|67):9835\"} * 100",
+          "expr": "nvidia_smi_utilization_gpu_ratio{instance=~\"10[.]208[.]211[.](60|61|63|64|65|67):9835\"} * 100",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1076,7 +1076,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "nvidia_smi_memory_used_bytes{instance=~\"10[.]208[.]211[.](5[2-9]|6[0-2]):9835\"}",
+          "expr": "nvidia_smi_memory_used_bytes{instance=~\"10[.]208[.]211[.](52|53|55|56|57|58):9835\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1136,7 +1136,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "nvidia_smi_memory_used_bytes{instance=~\"10[.]208[.]211[.](63|64|65|67):9835\"}",
+          "expr": "nvidia_smi_memory_used_bytes{instance=~\"10[.]208[.]211[.](60|61|63|64|65|67):9835\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1195,7 +1195,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "nvidia_smi_temperature_gpu{instance=~\"10[.]208[.]211[.](5[2-9]|6[0-2]):9835\"}",
+          "expr": "nvidia_smi_temperature_gpu{instance=~\"10[.]208[.]211[.](52|53|55|56|57|58):9835\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1254,7 +1254,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "nvidia_smi_temperature_gpu{instance=~\"10[.]208[.]211[.](63|64|65|67):9835\"}",
+          "expr": "nvidia_smi_temperature_gpu{instance=~\"10[.]208[.]211[.](60|61|63|64|65|67):9835\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1314,7 +1314,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "llamacpp:requests_processing{instance=~\"10[.]208[.]211[.](5[2-9]|6[0-2]):8080\"}",
+          "expr": "llamacpp:requests_processing{instance=~\"10[.]208[.]211[.](52|53|55|56|57|58):8080\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1325,7 +1325,7 @@
     },
     {
       "id": 430,
-      "title": "Multimodal Nodes — Active Slots (max 4 each)",
+      "title": "Multimodal Nodes — Active Slots (max 2 each)",
       "type": "bargauge",
       "datasource": {
         "type": "prometheus",
@@ -1368,13 +1368,13 @@
               }
             ]
           },
-          "max": 4
+          "max": 2
         }
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "llamacpp:requests_processing{instance=~\"10[.]208[.]211[.](63|64|65|67):8080\"}",
+          "expr": "llamacpp:requests_processing{instance=~\"10[.]208[.]211[.](60|61|63|64|65|67):8080\"}",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -1409,7 +1409,7 @@
       "fieldConfig": {
         "defaults": {
           "min": 0,
-          "max": 10,
+          "max": 6,
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 8
@@ -1454,7 +1454,7 @@
       "fieldConfig": {
         "defaults": {
           "min": 0,
-          "max": 4,
+          "max": 6,
           "custom": {
             "lineWidth": 2,
             "fillOpacity": 8

@@ -15,7 +15,7 @@ Scenarios
   throughput   Concurrency ramp 1→2→4→8 to find saturation
   routing      Same-node vs round-robin: sequential AND concurrent comparison
   image        Vision: single image, image+text, two images
-  distribution Ray Serve replica distribution check only
+  distribution Node spread check (fires concurrent requests through gateway)
   all          Run every scenario above (default)
 
 Usage
@@ -54,7 +54,6 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 GATEWAY_URL = "http://10.208.211.62:18000"
-RAY_SERVE_URL = "http://10.208.211.62:8001"
 MODEL = "ongc-llm"
 NOPROXY = {"http://": None, "https://": None}
 
@@ -523,34 +522,34 @@ async def _streaming_request(
 
 
 # ---------------------------------------------------------------------------
-# Ray Serve distribution check
+# Node distribution check — fires concurrent requests through the gateway
+# itself and inspects which node each landed on (gateway/router.py stamps
+# node_ip on every response). Replaces the old Ray Serve /health probe.
 # ---------------------------------------------------------------------------
 
 
-async def check_ray_serve_distribution(n: int = 6) -> dict[str, int]:
+async def check_node_distribution(api_key: str, n: int = 6) -> dict[str, int]:
     dist: dict[str, int] = defaultdict(int)
-    async with _make_client(timeout=10.0) as client:
+    async with _make_client(timeout=30.0) as client:
         results = await asyncio.gather(
-            *[client.get(f"{RAY_SERVE_URL}/health") for _ in range(n)],
+            *[
+                _single_request(client, api_key, _chat_payload(_user_msg(PROMPT_SHORT), max_tokens=8))
+                for _ in range(n)
+            ],
             return_exceptions=True,
         )
     for r in results:
-        if isinstance(r, Exception):
+        if isinstance(r, Exception) or not r.ok:
             dist["error"] += 1
             continue
-        try:
-            body = r.json()
-            ip = body.get("node_ip") or body.get("node") or "unknown"
-            dist[ip] += 1
-        except Exception:
-            dist["parse_error"] += 1
+        dist[r.node_ip or "unknown"] += 1
     return dict(dist)
 
 
 def _print_distribution(dist: dict[str, int]) -> None:
     total = sum(dist.values())
     if total == 0:
-        print("  WARNING: No responses from Ray Serve /health — check port 8001")
+        print("  WARNING: No successful responses — check gateway health")
         return
     print(f"  {total} responses:")
     for ip, cnt in sorted(dist.items(), key=lambda x: -x[1]):
@@ -558,8 +557,7 @@ def _print_distribution(dist: dict[str, int]) -> None:
         print(f"    {ip:<20} {cnt:>3}  {100 * cnt / total:4.0f}%  {bar}")
     unique = len([k for k in dist if k not in ("error", "parse_error", "unknown")])
     if unique <= 1:
-        print(f"\n  WARNING: All responses from {unique} node — replicas may be collocated")
-        print("           Run: ray status  (check GPU resources on workers)")
+        print(f"\n  WARNING: All responses from {unique} node — check gateway routing/health state")
     else:
         print(f"\n  OK: {unique} distinct nodes responding — distribution confirmed")
 
@@ -891,7 +889,7 @@ async def run_throughput_ramp(api_key: str) -> list[BenchmarkStats]:
 # Total cluster capacity: 8 concurrent generations.
 #
 # session_affinity=True  → gateway pins all requests from this API key to
-#                           the same Ray worker → same llama.cpp process.
+#                           the same node → same llama.cpp process.
 # session_affinity=False → gateway load-balances across all workers.
 #
 # Four sub-scenarios expose different facets of this behaviour:
@@ -1144,9 +1142,8 @@ async def run_image_thinking(api_key: str, image_path: Optional[str] = None) -> 
 
 
 async def main(args: argparse.Namespace) -> None:
-    global GATEWAY_URL, RAY_SERVE_URL, MODEL
+    global GATEWAY_URL, MODEL
     GATEWAY_URL = args.gateway_url
-    RAY_SERVE_URL = args.ray_url
     MODEL = args.model
 
     mode = args.mode
@@ -1170,10 +1167,10 @@ async def main(args: argparse.Namespace) -> None:
             print(f"  /health FAILED: {e}")
             sys.exit(1)
 
-    # Ray Serve distribution
+    # Node distribution
     if run_all or mode == "distribution":
-        print("\n[ distribution ] Ray Serve replica spread...")
-        dist = await check_ray_serve_distribution(n=6)
+        print("\n[ distribution ] Node spread across the pool...")
+        dist = await check_node_distribution(args.api_key, n=6)
         _print_distribution(dist)
         if mode == "distribution":
             return
@@ -1317,7 +1314,6 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--image",       default=None,                    help="Image file path for vision tests")
     p.add_argument("--image2",      default=None,                    help="Second image path for multi-image test")
     p.add_argument("--gateway-url", default=GATEWAY_URL)
-    p.add_argument("--ray-url",     default=RAY_SERVE_URL)
     p.add_argument("--model",       default=MODEL)
     return p.parse_args()
 

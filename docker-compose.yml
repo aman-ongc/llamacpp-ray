@@ -41,7 +41,6 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://llm:llm@postgres:5432/llm_platform
       REDIS_URL: redis://redis:6379/0
-      RAY_SERVE_URL: http://10.208.211.62:8001
       ADMIN_SECRET: "${ADMIN_SECRET:-changeme}"
       NO_PROXY: "localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in,postgres,redis,10.208.211.62"
       no_proxy: "localhost,127.0.0.1,10.0.0.0/8,.ongc.co.in,postgres,redis,10.208.211.62"

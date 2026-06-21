@@ -186,7 +186,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(llamacpp:predicted_tokens_seconds{instance=~\"10[.]208[.]211[.](5[2-9]|6[0-2]):8080\"})",
+          "expr": "sum(llamacpp:predicted_tokens_seconds{instance=~\"10[.]208[.]211[.](52|53|55|56|57|58):8080\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -238,7 +238,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(llamacpp:predicted_tokens_seconds{instance=~\"10[.]208[.]211[.](63|64|65|67):8080\"})",
+          "expr": "sum(llamacpp:predicted_tokens_seconds{instance=~\"10[.]208[.]211[.](60|61|63|64|65|67):8080\"})",
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
@@ -281,7 +281,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(llamacpp:prompt_tokens_seconds{instance=~\"10[.]208[.]211[.](5[2-9]|6[0-2]):8080\"})",
+          "expr": "sum(llamacpp:prompt_tokens_seconds{instance=~\"10[.]208[.]211[.](52|53|55|56|57|58):8080\"})",
           "legendFormat": "Prompt t/s",
           "datasource": {
             "type": "prometheus",
@@ -290,7 +290,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum(llamacpp:predicted_tokens_seconds{instance=~\"10[.]208[.]211[.](5[2-9]|6[0-2]):8080\"})",
+          "expr": "sum(llamacpp:predicted_tokens_seconds{instance=~\"10[.]208[.]211[.](52|53|55|56|57|58):8080\"})",
           "legendFormat": "Predicted t/s",
           "datasource": {
             "type": "prometheus",
@@ -334,7 +334,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(llamacpp:prompt_tokens_seconds{instance=~\"10[.]208[.]211[.](63|64|65|67):8080\"})",
+          "expr": "sum(llamacpp:prompt_tokens_seconds{instance=~\"10[.]208[.]211[.](60|61|63|64|65|67):8080\"})",
           "legendFormat": "Prompt t/s",
           "datasource": {
             "type": "prometheus",
@@ -343,7 +343,7 @@
         },
         {
           "refId": "B",
-          "expr": "sum(llamacpp:predicted_tokens_seconds{instance=~\"10[.]208[.]211[.](63|64|65|67):8080\"})",
+          "expr": "sum(llamacpp:predicted_tokens_seconds{instance=~\"10[.]208[.]211[.](60|61|63|64|65|67):8080\"})",
           "legendFormat": "Predicted t/s",
           "datasource": {
             "type": "prometheus",
@@ -402,7 +402,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "nvidia_smi_utilization_gpu_ratio{instance=~\"10[.]208[.]211[.](5[2-9]|6[0-2]):9835\"} * 100",
+          "expr": "nvidia_smi_utilization_gpu_ratio{instance=~\"10[.]208[.]211[.](52|53|55|56|57|58):9835\"} * 100",
           "legendFormat": "{{instance}}",
           "datasource": {
             "type": "prometheus",
@@ -411,7 +411,7 @@
         },
         {
           "refId": "B",
-          "expr": "nvidia_smi_utilization_gpu_ratio{instance=~\"10[.]208[.]211[.](63|64|65|67):9835\"} * 100",
+          "expr": "nvidia_smi_utilization_gpu_ratio{instance=~\"10[.]208[.]211[.](60|61|63|64|65|67):9835\"} * 100",
           "legendFormat": "{{instance}}",
           "datasource": {
             "type": "prometheus",
@@ -457,7 +457,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "nvidia_smi_memory_used_bytes{instance=~\"10[.]208[.]211[.](5[2-9]|6[0-2]):9835\"} / 1073741824",
+          "expr": "nvidia_smi_memory_used_bytes{instance=~\"10[.]208[.]211[.](52|53|55|56|57|58):9835\"} / 1073741824",
           "legendFormat": "{{instance}}",
           "datasource": {
             "type": "prometheus",
@@ -466,7 +466,7 @@
         },
         {
           "refId": "B",
-          "expr": "nvidia_smi_memory_used_bytes{instance=~\"10[.]208[.]211[.](63|64|65|67):9835\"} / 1073741824",
+          "expr": "nvidia_smi_memory_used_bytes{instance=~\"10[.]208[.]211[.](60|61|63|64|65|67):9835\"} / 1073741824",
           "legendFormat": "{{instance}}",
           "datasource": {
             "type": "prometheus",

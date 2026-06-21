@@ -42,7 +42,7 @@ HEALTHY_MULTIMODAL_NODES = Gauge(
 )
 QUEUE_REJECTED = Counter(
     "llm_queue_rejected_total",
-    "Requests rejected because the Ray Serve queue was full",
+    "Requests rejected because the gateway's inference queue was full",
     ["request_type"],
 )
 RATE_LIMITED = Counter(

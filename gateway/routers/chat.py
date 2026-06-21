@@ -26,7 +26,7 @@ from gateway.metrics import (
 )
 from gateway.models import User
 from gateway.rate_limiter import MULTIMODAL_RATE_LIMIT, TEXT_RATE_LIMIT, check_rate_limit
-from gateway.ray_client import stream_inference, submit_inference
+from gateway.router import stream_inference, submit_inference
 
 
 router = APIRouter(prefix="/v1", tags=["chat"])
@@ -43,7 +43,7 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: int = 256
     temperature: float = 0.7
     stream: bool = False
-    # When True, all requests from the same API key go to the same Ray worker
+    # When True, all requests from the same API key go to the same node
     # so llama.cpp can reuse its KV cache across turns.
     session_affinity: bool = Field(default=False, exclude=True)
 
@@ -140,6 +140,7 @@ async def chat_completions(
     try:
         await check_rate_limit(
             user.id,
+            pool=request_type,
             limit=MULTIMODAL_RATE_LIMIT if multimodal else TEXT_RATE_LIMIT,
         )
     except HTTPException as exc:

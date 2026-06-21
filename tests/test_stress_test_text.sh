@@ -3,7 +3,7 @@
 set -u
 
 ENDPOINT="http://10.208.211.62:18000/v1/chat/completions"
-API_KEY="sk-ongc-An0SIhEQMxAI27GLejMVqmHmFwWslrCb74SyG3LLWKw"
+API_KEY="sk-ongc-nMbhF6gZKOeYLY8OcUABnw93erso66zatNGuamyD07M"
 
 MAX_REQUESTS=200
 REQUEST_COUNT=0
