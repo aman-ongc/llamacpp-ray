@@ -6,6 +6,12 @@ set +e  # single bad iteration must NOT kill the loop
 
 POLL_INTERVAL=30
 RESTART_WAIT=120
+# Hard ceiling on any single SSH call (health curl or restart command). SSH's
+# own ConnectTimeout only covers the TCP-connect phase — a stuck banner/key
+# exchange past that point can hang indefinitely with no recovery. Wrapping
+# every SSH/curl call in `timeout` bounds the damage to SSH_TIMEOUTs, so one
+# wedged node can't freeze monitoring of any other node.
+SSH_TIMEOUT=20
 SSH_PASS="${SSH_PASS:-Ongc@1234}"
 LLAMA_SERVER="${LLAMA_SERVER:-/home/administrator/projects/local_llm/llama.cpp/build/bin/llama-server}"
 CONTROLLER_AS_WORKER="${CONTROLLER_AS_WORKER:-false}"
@@ -50,7 +56,7 @@ trap 'log "Watchdog stopping (signal received)."; exit 0' SIGTERM SIGINT
 
 remote_exec() {
     local ip="$1"; shift
-    sshpass -p "$SSH_PASS" ssh \
+    timeout "$SSH_TIMEOUT" sshpass -p "$SSH_PASS" ssh \
         -o StrictHostKeyChecking=no \
         -o ConnectTimeout=10 \
         "administrator@${ip}" "$@"
@@ -97,7 +103,7 @@ restart_multimodal_node() {
 wait_for_health() {
     local ip="$1" port="$2" elapsed=0
     while (( elapsed < RESTART_WAIT )); do
-        if curl --noproxy '*' -sf "http://${ip}:${port}/health" >/dev/null 2>&1; then
+        if curl --noproxy '*' -sf --max-time 5 "http://${ip}:${port}/health" >/dev/null 2>&1; then
             return 0
         fi
         sleep 5
@@ -108,7 +114,7 @@ wait_for_health() {
 
 check_and_restart() {
     local ip="$1" type="$2" port="$3"
-    if curl --noproxy '*' -sf "http://${ip}:${port}/health" >/dev/null 2>&1; then
+    if curl --noproxy '*' -sf --max-time 5 "http://${ip}:${port}/health" >/dev/null 2>&1; then
         return 0
     fi
     log "${ip} (${type}) llama-server DOWN — restarting"
@@ -127,16 +133,24 @@ check_and_restart() {
     fi
 }
 
-log "Watchdog started. Monitoring ${#NODES[@]} nodes every ${POLL_INTERVAL}s (parallel checks)."
-# All node checks run as background subshells in parallel.
-# Worst-case cycle time is max(single node restart wait) = RESTART_WAIT = 120s
-# instead of sum(all waits). Log lines from concurrent restarts may interleave
-# but each line includes the node IP so they remain readable.
-while true; do
-    for node in "${NODES[@]}"; do
-        IFS='|' read -r ip type port <<< "$node"
-        check_and_restart "$ip" "$type" "$port" &
+monitor_node() {
+    local ip="$1" type="$2" port="$3"
+    while true; do
+        check_and_restart "$ip" "$type" "$port"
+        sleep "$POLL_INTERVAL"
     done
-    wait   # wait for all parallel checks before sleeping
-    sleep "$POLL_INTERVAL"
+}
+
+log "Watchdog started. Monitoring ${#NODES[@]} nodes every ${POLL_INTERVAL}s (independent per-node loops)."
+# Each node gets its own long-running loop instead of "spawn all, wait for
+# all, sleep, repeat" — a shared `wait` barrier meant one wedged node could
+# freeze the whole cycle (and thus monitoring of every other node) for as
+# long as its SSH session hung, which is exactly what happened in production
+# (one stuck SSH session to a single node froze the entire watchdog for 5
+# hours). With independent loops + the SSH_TIMEOUT bound above, a wedged
+# node retries on its own schedule and can never block its peers.
+for node in "${NODES[@]}"; do
+    IFS='|' read -r ip type port <<< "$node"
+    monitor_node "$ip" "$type" "$port" &
 done
+wait   # only returns at watchdog shutdown (all per-node loops are infinite)
