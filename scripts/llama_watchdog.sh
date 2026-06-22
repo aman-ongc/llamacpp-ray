@@ -62,9 +62,19 @@ remote_exec() {
         "administrator@${ip}" "$@"
 }
 
+# pkill alone races the respawn: SIGTERM doesn't guarantee the old process
+# (often busy in a GPU/CUDA call under load) actually exits before the next
+# `nohup ... &` runs, so a second llama-server can start while the first is
+# still alive — both then fight over the same GPU/port, neither serves
+# requests cleanly, the health check keeps failing, and every subsequent
+# cycle repeats this, stacking up more zombie processes. This is what drove
+# .53/.60/.63/.67 to load average ~44 and an unresponsive sshd. -9 plus a
+# poll-until-dead loop (run remotely, before the nohup) closes that race.
+KILL_WAIT_LOOP='for i in $(seq 1 10); do pgrep -x llama-server >/dev/null 2>&1 || break; pkill -9 llama-server 2>/dev/null; sleep 1; done'
+
 restart_text_node() {
     local ip="$1"
-    local cmd="pkill llama-server || true; sleep 2; \
+    local cmd="${KILL_WAIT_LOOP}; \
         mv /tmp/llama-server.log /tmp/llama-server.log.prev 2>/dev/null; \
         nohup ${LLAMA_SERVER} \
         -m ${TEXT_MODEL} \
@@ -86,7 +96,7 @@ restart_text_node() {
 
 restart_multimodal_node() {
     local ip="$1"
-    local cmd="pkill llama-server || true; sleep 2; \
+    local cmd="${KILL_WAIT_LOOP}; \
         mv /tmp/llama-server.log /tmp/llama-server.log.prev 2>/dev/null; \
         nohup ${LLAMA_SERVER} \
         -m ${MULTIMODAL_MODEL} \
@@ -130,14 +140,37 @@ check_and_restart() {
         log "${ip} (${type}) recovered after ${elapsed}s"
     else
         log "${ip} (${type}) FAILED to recover after ${RESTART_WAIT}s — will retry next cycle"
+        return 1
     fi
 }
 
+# Backoff schedule applied after consecutive restart-command (SSH) failures —
+# distinct from RESTART_WAIT/health-recovery. A node whose sshd is wedged
+# (high load, stuck process table) won't be fixed by retrying every 30s; that
+# just queues more SSH attempts and pkill/nohup invocations on top of an
+# already-overloaded host, which is exactly how .53/.60/.63/.67 piled up
+# leaked processes into a load-average-44 spiral. Backing off gives the host
+# room to drain on its own; a human/local reboot is the real fix once a node
+# reaches the end of this schedule.
+FAILURE_BACKOFFS_SECONDS=(30 30 60 120 300 300)
+
 monitor_node() {
     local ip="$1" type="$2" port="$3"
+    local consecutive_failures=0
     while true; do
-        check_and_restart "$ip" "$type" "$port"
-        sleep "$POLL_INTERVAL"
+        if check_and_restart "$ip" "$type" "$port"; then
+            consecutive_failures=0
+            sleep "$POLL_INTERVAL"
+        else
+            local idx=$consecutive_failures
+            (( idx >= ${#FAILURE_BACKOFFS_SECONDS[@]} )) && idx=$(( ${#FAILURE_BACKOFFS_SECONDS[@]} - 1 ))
+            local backoff="${FAILURE_BACKOFFS_SECONDS[$idx]}"
+            (( consecutive_failures++ ))
+            if (( consecutive_failures == 3 )); then
+                log "${ip} (${type}) ${consecutive_failures} consecutive restart failures — likely needs a local/physical reboot (SSH unresponsive), backing off to ${backoff}s between attempts"
+            fi
+            sleep "$backoff"
+        fi
     done
 }
 

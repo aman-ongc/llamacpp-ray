@@ -96,7 +96,7 @@ async def create_api_key(
     username: str,
     payload: KeyCreate,
     session: AsyncSession = Depends(get_db),
-) -> dict[str, str]:
+) -> dict[str, str | None]:
     user = await _get_user_by_username(username, session)
 
     raw_key = generate_api_key()

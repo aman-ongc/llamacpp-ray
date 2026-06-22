@@ -97,6 +97,20 @@ info "Waiting for gateway container..."
 wait_for_http "http://${CONTROLLER_IP}:18000/health" "Gateway" 30
 ok "Docker stack ready"
 
+# ── Gateway port allowlist (10.208.211.0/24 + 10.205.136.0/24 only) ──────────
+# iptables rules don't survive a reboot, so this is reapplied on every start.
+# DOCKER-USER is the chain Docker preserves for user filtering of published
+# ports — must allow ESTABLISHED/RELATED first, or reply packets (whose
+# source is the container's internal bridge IP, not the client's subnet)
+# get silently dropped, breaking every connection including from allowed IPs.
+info "Applying gateway port 18000 allowlist (10.208.211.0/24, 10.205.136.0/24)..."
+echo "$SUDO_PASS" | sudo -S iptables -F DOCKER-USER
+echo "$SUDO_PASS" | sudo -S iptables -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+echo "$SUDO_PASS" | sudo -S iptables -A DOCKER-USER -p tcp -m conntrack --ctorigdstport 18000 -s 10.208.211.0/24 -j ACCEPT
+echo "$SUDO_PASS" | sudo -S iptables -A DOCKER-USER -p tcp -m conntrack --ctorigdstport 18000 -s 10.205.136.0/24 -j ACCEPT
+echo "$SUDO_PASS" | sudo -S iptables -A DOCKER-USER -p tcp -m conntrack --ctorigdstport 18000 -j DROP
+ok "Gateway allowlist applied"
+
 # ── Step 2: llama-server workers ──────────────────────────────────────────────
 info "Step 2/3 — Starting llama-server workers (no orchestrator — gateway routes directly)..."
 

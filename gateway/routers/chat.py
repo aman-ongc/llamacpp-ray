@@ -43,6 +43,18 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: int = 256
     temperature: float = 0.7
     stream: bool = False
+    top_p: float | None = None
+    top_k: int | None = None
+    presence_penalty: float | None = None
+    # Convenience flag — folded into chat_template_kwargs.enable_thinking below.
+    # Default False: avoids burning the whole max_tokens budget on hidden
+    # chain-of-thought (reasoning_content) by surprise.
+    enable_thinking: bool = Field(default=False, exclude=True)
+    # Forwarded verbatim into chat_template_kwargs — e.g. pass
+    # {"enable_thinking": false} directly (OpenAI SDK extra_body style) as an
+    # alternative to the enable_thinking flag above. Explicit keys here win
+    # over the convenience flag.
+    chat_template_kwargs: dict[str, Any] | None = Field(default=None, exclude=True)
     # When True, all requests from the same API key go to the same node
     # so llama.cpp can reuse its KV cache across turns.
     session_affinity: bool = Field(default=False, exclude=True)
@@ -59,7 +71,11 @@ def _is_multimodal_request(messages: list[ChatMessage]) -> bool:
 
 
 def _payload_for_inference(payload: ChatCompletionRequest) -> dict[str, Any]:
-    return payload.model_dump(exclude={"session_affinity"})
+    data = payload.model_dump(exclude={"session_affinity"}, exclude_none=True)
+    template_kwargs = dict(payload.chat_template_kwargs or {})
+    template_kwargs.setdefault("enable_thinking", payload.enable_thinking)
+    data["chat_template_kwargs"] = template_kwargs
+    return data
 
 
 _MODEL_ALIAS = "ongc-llm"
@@ -70,7 +86,9 @@ def _normalize_completion_response(result: dict[str, Any]) -> dict[str, Any]:
     for choice in result.get("choices", []):
         message = choice.get("message")
         if isinstance(message, dict):
-            message.pop("reasoning_content", None)
+            reasoning = message.pop("reasoning_content", None)
+            if reasoning and not message.get("content"):
+                message["content"] = reasoning
     return result
 
 

@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     multimodal_llama_port: int = 8080
     multimodal_llama_model_path: str = "/mnt/d/Models/qwen-3-vl/Qwen3VL-8B-Instruct-Q8_0.gguf"
     multimodal_llama_mmproj_path: str = "/mnt/d/Models/qwen-3-vl/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"
-    multimodal_max_queued_requests: int = Field(default=40)
+    multimodal_max_queued_requests: int = Field(default=50)
 
     # ── Shared llama.cpp settings ─────────────────────────────────────────────
     llama_context: int = 65536
